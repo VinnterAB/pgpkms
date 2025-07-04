@@ -18,7 +18,7 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	}
 
 	// Sign the data
-	signedData, err := signData(client, *opts.Sign, inputData, false)
+	signedData, err := signData(client, opts.User, inputData, opts.ClearSign)
 	if err != nil {
 		return err
 	}
@@ -43,41 +43,8 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	return nil
 }
 
-func ClearSign(client kms.Client, opts *Opts, args []string) error {
-	// Determine input source
-	inputData, inputName, err := determineInputSource(args)
-	if err != nil {
-		return err
-	}
-
-	// Sign the data
-	signedData, err := signData(client, *opts.ClearSign, inputData, true)
-	if err != nil {
-		return err
-	}
-
-	// Determine output writer and write
-	writer, outputFile, err := determineOutputWriter(args, opts, inputName)
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-
-	err = writeOutput(writer, signedData)
-	if err != nil {
-		return err
-	}
-
-	// Print status message if writing to file
-	if outputFile != "" {
-		fmt.Printf("Clear signed %s -> %s\n", inputName, outputFile)
-	}
-
-	return nil
-}
-
 // signData signs the input data using KMS and returns the signed data
-func signData(client kms.Client, keyId string, inputData []byte, clearText bool) ([]byte, error) {
+func signData(client kms.Client, keyId string, inputData []byte, clearSign bool) ([]byte, error) {
 	// Get KMS key
 	key, err := client.GetKey(keyId)
 	if err != nil {
@@ -85,7 +52,7 @@ func signData(client kms.Client, keyId string, inputData []byte, clearText bool)
 	}
 
 	// Sign the data
-	signedData, err := pgp.SignData(key.PublicKey, key.PrivateKey, inputData, clearText)
+	signedData, err := pgp.SignData(key.PublicKey, key.PrivateKey, inputData, clearSign)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign data: %w", err)
 	}

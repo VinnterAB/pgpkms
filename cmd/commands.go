@@ -34,22 +34,25 @@ func Execute(client kms.Client) error {
 				return nil
 			}
 		}
+		fmt.Fprintf(os.Stderr, "%s", err)
 		os.Exit(1)
 	}
 
-	if opts.Export != nil && (opts.Sign != nil || opts.ClearSign != nil) {
+	if opts.Export && (opts.Sign || opts.ClearSign) {
 		return errors.New("conflicting commands")
 	}
 
-	if opts.Export != nil {
+	// these require a key
+	if (opts.Export || opts.Sign || opts.ClearSign) && opts.User == "" {
+		return errors.New("Specify the key id with -u/--local-user ")
+	}
+
+	if opts.Export {
+		fmt.Println("Will do export")
 		return ExportKey(client, &opts, args)
 	}
 
-	if opts.ClearSign != nil {
-		return ClearSign(client, &opts, args)
-	}
-
-	if opts.Sign != nil {
+	if opts.Sign || opts.ClearSign {
 		return Sign(client, &opts, args)
 	}
 

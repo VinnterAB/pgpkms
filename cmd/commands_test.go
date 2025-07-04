@@ -108,7 +108,8 @@ func TestExportCommand(t *testing.T) {
 		keyId := "test-key-id"
 		name := "Test User"
 		email := "test@example.com"
-		opts.Export = &keyId
+		opts.Export = true
+		opts.User = keyId
 		opts.ExportName = &name
 		opts.ExportEmail = &email
 
@@ -140,7 +141,8 @@ func TestExportCommand(t *testing.T) {
 		keyId := "test-key-id"
 		name := "Test User"
 		email := "test@example.com"
-		opts.Export = &keyId
+		opts.Export = true
+		opts.User = keyId
 		opts.ExportName = &name
 		opts.ExportEmail = &email
 		opts.Armor = true
@@ -165,7 +167,8 @@ func TestExportCommand(t *testing.T) {
 		mockClient := NewMockKmsClient()
 
 		keyId := "test-key-id"
-		opts.Export = &keyId
+		opts.Export = true
+		opts.User = keyId
 
 		err := ExportKey(mockClient, &opts, []string{})
 		assert.Error(t, err, "at least one of --export-name or --export-email must be provided")
@@ -177,7 +180,8 @@ func TestExportCommand(t *testing.T) {
 
 		keyId := "test-key-id"
 		name := "Test User"
-		opts.Export = &keyId
+		opts.Export = true
+		opts.User = keyId
 		opts.ExportName = &name
 
 		err := ExportKey(mockClient, &opts, []string{})
@@ -199,7 +203,8 @@ func TestSignCommand(t *testing.T) {
 		os.Stdout = w
 
 		keyId := "test-key-id"
-		opts.Sign = &keyId
+		opts.Sign = true
+		opts.User = keyId
 
 		// Test data
 		testData := []byte("Hello, World!")
@@ -231,7 +236,8 @@ func TestSignCommand(t *testing.T) {
 		os.Stdout = w
 
 		keyId := "test-key-id"
-		opts.ClearSign = &keyId
+		opts.ClearSign = true
+		opts.User = keyId
 
 		// Test data
 		testData := []byte("Hello, World!")
@@ -307,8 +313,9 @@ func TestExecuteFunction(t *testing.T) {
 
 		// Set conflicting options
 		keyId := "test-key-id"
-		opts.Export = &keyId
-		opts.Sign = &keyId
+		opts.User = keyId
+		opts.Export = true
+		opts.Sign = true
 
 		err := Execute(mockClient)
 		assert.ErrorContains(t, err, "conflicting commands")
@@ -326,7 +333,8 @@ func TestExecuteFunction(t *testing.T) {
 		// Set export options
 		keyId := "test-key-id"
 		name := "Test User"
-		opts.Export = &keyId
+		opts.Export = true
+		opts.User = keyId
 		opts.ExportName = &name
 
 		err := Execute(mockClient)
@@ -367,7 +375,8 @@ func TestSign(t *testing.T) {
 		defer os.Remove(outputFile)
 
 		keyId := "test-key-id"
-		opts.Sign = &keyId
+		opts.Sign = true
+		opts.User = keyId
 		opts.Output = &outputFile
 
 		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
@@ -397,10 +406,11 @@ func TestSign(t *testing.T) {
 		defer os.Remove(outputFile)
 
 		keyId := "test-key-id"
-		opts.ClearSign = &keyId
+		opts.ClearSign = true
+		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = ClearSign(mockClient, &opts, []string{tmpFile.Name()})
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -427,7 +437,8 @@ func TestSign(t *testing.T) {
 		defer os.Remove(outputFile)
 
 		keyId := "test-key-id"
-		opts.Sign = &keyId
+		opts.Sign = true
+		opts.User = keyId
 		opts.Output = &outputFile
 
 		err = Sign(mockClient, &opts, []string{tmpFile.Name()})

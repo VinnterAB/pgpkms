@@ -43,12 +43,12 @@ Export a KMS public key as a PGP public key block:
 
 ```bash
 # Export with name and email
-pgpkms --export arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
+pgpkms --export -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
        --export-name "John Doe" \
        --export-email "john@example.com"
 
 # Export with ASCII armor
-pgpkms --export arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
+pgpkms --export -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
        --export-name "John Doe" \
        --export-email "john@example.com" \
        --armor
@@ -60,14 +60,14 @@ Sign a file using a KMS key:
 
 ```bash
 # Sign a file (creates input.txt.asc)
-pgpkms --sign arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 input.txt
+pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 input.txt
 
 # Sign with custom output file
-pgpkms --sign arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
+pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
        input.txt -o signature.sig
 
 # Sign data from stdin to stdout
-echo "Hello, World!" | pgpkms --sign arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+echo "Hello, World!" | pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
 ```
 
 ### Clear Text Signing
@@ -76,10 +76,10 @@ Create human-readable signed messages:
 
 ```bash
 # Clear sign a file
-pgpkms --clear-sign arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 message.txt
+pgpkms --clear-sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 message.txt
 
 # Clear sign from stdin
-echo "This is a test message" | pgpkms --clear-sign arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+echo "This is a test message" | pgpkms --clear-sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
 ```
 
 ## Command Line Options
@@ -94,9 +94,10 @@ Application Options:
       --export-name     Name to use for the exported PGP key (used with --export)
       --export-email    Email to use for the exported PGP key (used with --export)
       --export-comment  Comment to use for the exported PGP key (used with --export)
-      --sign            Sign a file using KMS key (specify KMS key ID)
-      --clear-sign      Create a clear text signature using KMS key (specify KMS key ID)
+      --sign            Sign a file using KMS key
+      --clear-sign      Create a clear text signature using KMS key
   -o, --output          Output file (default: input file + .asc)
+  -u, --local-user      The key ID to use
 
 Help Options:
   -h, --help            Show this help message

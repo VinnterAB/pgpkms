@@ -24,7 +24,7 @@ func ExportKey(client kms.Client, opts *Opts, args []string) error {
 		return fmt.Errorf("at least one of --export-name or --export-email must be provided")
 	}
 
-	key, err := client.GetKey(*opts.Export)
+	key, err := client.GetKey(opts.User)
 	if err != nil {
 		return err
 	}
