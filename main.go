@@ -23,6 +23,6 @@ func main() {
 	client := kms.NewAWSKmsClient(cfg)
 
 	if err := cmd.Execute(client); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
 	}
 }
