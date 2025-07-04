@@ -38,6 +38,14 @@ func Execute(client kms.Client) error {
 		os.Exit(1)
 	}
 
+	if opts.ArmorAlias {
+		opts.Armor = true
+	}
+
+	if opts.ClearSignAlias {
+		opts.ClearSign = true
+	}
+
 	if opts.Export && (opts.Sign || opts.ClearSign) {
 		return errors.New("conflicting commands")
 	}

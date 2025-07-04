@@ -12,6 +12,7 @@ import (
 	"github.com/vinnterab/pgpkms/kms"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+	"golang.org/x/crypto/openpgp/clearsign"
 	"golang.org/x/crypto/openpgp/packet"
 )
 
@@ -102,7 +103,7 @@ func serialize(entity *openpgp.Entity, armored bool) (*bytes.Buffer, error) {
 }
 
 // SignData signs data using the provided KMS key and signer
-func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearText bool) ([]byte, error) {
+func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSign, armor bool) ([]byte, error) {
 	pubKeyAny := signer.Public()
 
 	creationDate := kmsKey.Description.KeyMetadata.CreationDate
@@ -116,15 +117,41 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearTex
 		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
 	}
 
+	pgpPrivateKey := &packet.PrivateKey{
+		PublicKey:  *pgpPubKey,
+		PrivateKey: signer,
+	}
+
+	if clearSign {
+		return clearSignData(pgpPrivateKey, data)
+	}
+
+	return detachedSignature(kmsKey, pgpPrivateKey, data, armor)
+}
+
+func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte) ([]byte, error) {
+	var signature bytes.Buffer
+	writer, err := clearsign.Encode(&signature, pgpPrivateKey, &packet.Config{
+		DefaultHash: crypto.SHA256,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
+	}
+	if _, err = writer.Write(data); err != nil {
+		writer.Close()
+		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
+	}
+	writer.Close()
+	return signature.Bytes(), nil
+}
+
+func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, data []byte, armor bool) ([]byte, error) {
 	// Create a default user ID for signing
 	userId := packet.NewUserId(fmt.Sprintf("AWS KMS Key for %s", *kmsKey.Description.KeyMetadata.Arn), "", "")
 
 	entity := &openpgp.Entity{
-		PrimaryKey: pgpPubKey,
-		PrivateKey: &packet.PrivateKey{
-			PublicKey:  *pgpPubKey,
-			PrivateKey: signer,
-		},
+		PrimaryKey: &pgpPrivateKey.PublicKey,
+		PrivateKey: pgpPrivateKey,
 		Identities: make(map[string]*openpgp.Identity),
 	}
 
@@ -133,15 +160,15 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearTex
 		UserId: userId,
 		SelfSignature: &packet.Signature{
 			SigType:      packet.SigTypePositiveCert,
-			PubKeyAlgo:   pgpPubKey.PubKeyAlgo,
+			PubKeyAlgo:   pgpPrivateKey.PublicKey.PubKeyAlgo,
 			Hash:         crypto.SHA256,
-			CreationTime: *creationDate,
-			IssuerKeyId:  &pgpPubKey.KeyId,
+			CreationTime: *kmsKey.Description.KeyMetadata.CreationDate,
+			IssuerKeyId:  &pgpPrivateKey.PublicKey.KeyId,
 		},
 	}
 
 	// Sign the user ID with the primary key
-	err := identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, &packet.Config{
+	err := identity.SelfSignature.SignUserId(userId.Id, &pgpPrivateKey.PublicKey, entity.PrivateKey, &packet.Config{
 		DefaultHash: crypto.SHA256,
 	})
 	if err != nil {
@@ -151,13 +178,13 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearTex
 	entity.Identities[userId.Name] = identity
 
 	// Sign the data
-	var signedData bytes.Buffer
-	if clearText {
-		err = openpgp.ArmoredDetachSignText(&signedData, entity, bytes.NewReader(data), &packet.Config{
+	var signature bytes.Buffer
+	if armor {
+		err = openpgp.ArmoredDetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
 			DefaultHash: crypto.SHA256,
 		})
 	} else {
-		err = openpgp.ArmoredDetachSign(&signedData, entity, bytes.NewReader(data), &packet.Config{
+		err = openpgp.DetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
 			DefaultHash: crypto.SHA256,
 		})
 	}
@@ -166,5 +193,5 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearTex
 		return nil, fmt.Errorf("failed to sign data: %w", err)
 	}
 
-	return signedData.Bytes(), nil
+	return signature.Bytes(), nil
 }

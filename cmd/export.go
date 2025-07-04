@@ -8,6 +8,10 @@ import (
 )
 
 func ExportKey(client kms.Client, opts *Opts, args []string) error {
+	if opts.ArmorAlias {
+		opts.Armor = true
+	}
+
 	var name, comment, email string
 	if opts.ExportName != nil {
 		name = *opts.ExportName

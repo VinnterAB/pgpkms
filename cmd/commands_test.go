@@ -20,6 +20,8 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+const ClearSignHeader = "-----BEGIN PGP SIGNED MESSAGE-----"
+
 // MockSigner implements crypto.Signer for testing
 type MockSigner struct {
 	privateKey *ecdsa.PrivateKey
@@ -162,6 +164,40 @@ func TestExportCommand(t *testing.T) {
 		assert.Assert(t, strings.Contains(output, "-----END PGP PUBLIC KEY BLOCK-----"))
 	})
 
+	t.Run("Export with armor alias armour", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		// Set command line args for export with armor
+		keyId := "test-key-id"
+		name := "Test User"
+		email := "test@example.com"
+		opts.Export = true
+		opts.User = keyId
+		opts.ExportName = &name
+		opts.ExportEmail = &email
+		opts.ArmorAlias = true
+
+		err := ExportKey(mockClient, &opts, []string{})
+		assert.NilError(t, err)
+
+		// Restore stdout and read output
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		// Should contain armored PGP key
+		assert.Assert(t, strings.Contains(output, "-----BEGIN PGP PUBLIC KEY BLOCK-----"))
+		assert.Assert(t, strings.Contains(output, "-----END PGP PUBLIC KEY BLOCK-----"))
+	})
+
 	t.Run("Export without name or email should fail", func(t *testing.T) {
 		opts = Opts{}
 		mockClient := NewMockKmsClient()
@@ -209,7 +245,7 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, false)
+		signedData, err := signData(mockClient, keyId, testData, false, false)
 		assert.NilError(t, err)
 
 		err = writeOutput(os.Stdout, signedData)
@@ -242,7 +278,7 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, true)
+		signedData, err := signData(mockClient, keyId, testData, true, true)
 		assert.NilError(t, err)
 
 		err = writeOutput(os.Stdout, signedData)
@@ -258,6 +294,7 @@ func TestSignCommand(t *testing.T) {
 		// Should contain clear signed data
 		assert.Assert(t, len(output) > 0)
 		assert.Assert(t, strings.Contains(output, "Hello, World!") || len(output) > 20)
+		assert.Assert(t, strings.Contains(output, ClearSignHeader), output)
 	})
 
 	t.Run("Sign with KMS error", func(t *testing.T) {
@@ -267,7 +304,7 @@ func TestSignCommand(t *testing.T) {
 		keyId := "test-key-id"
 		testData := []byte("Hello, World!")
 
-		_, err := signData(mockClient, keyId, testData, false)
+		_, err := signData(mockClient, keyId, testData, false, false)
 		assert.ErrorContains(t, err, "KMS signing failed")
 	})
 }
@@ -416,6 +453,44 @@ func TestSign(t *testing.T) {
 		// Check that output file was created
 		_, err = os.Stat(outputFile)
 		assert.NilError(t, err, "Output file should be created")
+		output, err := os.ReadFile(outputFile)
+		assert.NilError(t, err, "Output file should be readable")
+		assert.Assert(t, strings.Contains(string(output), ClearSignHeader))
+	})
+
+	t.Run("Clear sign (with alias) file to default output", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		// Create a temporary input file
+		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
+		assert.NilError(t, err)
+		defer os.Remove(tmpFile.Name())
+
+		testData := "Hello, World!"
+		_, err = tmpFile.WriteString(testData)
+		assert.NilError(t, err)
+		tmpFile.Close()
+
+		// Set output file explicitly to enable file output
+		outputFile := tmpFile.Name() + ".asc"
+		defer os.Remove(outputFile)
+
+		keyId := "test-key-id"
+		opts.ClearSignAlias = true
+		opts.User = keyId
+		opts.Output = &outputFile
+
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+		assert.NilError(t, err)
+
+		// Check that output file was created
+		_, err = os.Stat(outputFile)
+		assert.NilError(t, err, "Output file should be created")
+		output, err := os.ReadFile(outputFile)
+		assert.NilError(t, err, "Output file should be readable")
+		outString := string(output)
+		assert.Assert(t, strings.Contains(outString, ClearSignHeader), outString)
 	})
 
 	t.Run("Sign with custom output file", func(t *testing.T) {
