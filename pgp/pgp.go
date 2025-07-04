@@ -30,8 +30,6 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
 	}
 
-	// Use the provided signer
-
 	// Create a self-signature for the identity
 	var userId *packet.UserId
 	if name != "" || comment != "" || email != "" {
@@ -126,7 +124,7 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSig
 		return clearSignData(pgpPrivateKey, data, digestHash)
 	}
 
-	return detachedSignature(kmsKey, pgpPrivateKey, data, armor, digestHash)
+	return detachedSignature(pgpPrivateKey, data, armor, digestHash)
 }
 
 func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash crypto.Hash) ([]byte, error) {
@@ -145,39 +143,13 @@ func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash cry
 	return signature.Bytes(), nil
 }
 
-func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, data []byte, armor bool, digestHash crypto.Hash) ([]byte, error) {
-	// Create a default user ID for signing
-	userId := packet.NewUserId(fmt.Sprintf("AWS KMS Key for %s", *kmsKey.Description.KeyMetadata.Arn), "", "")
-
+func detachedSignature(pgpPrivateKey *packet.PrivateKey, data []byte, armor bool, digestHash crypto.Hash) ([]byte, error) {
 	entity := &openpgp.Entity{
 		PrimaryKey: &pgpPrivateKey.PublicKey,
 		PrivateKey: pgpPrivateKey,
-		Identities: make(map[string]*openpgp.Identity),
 	}
 
-	// Create the identity and sign it
-	identity := &openpgp.Identity{
-		UserId: userId,
-		SelfSignature: &packet.Signature{
-			SigType:      packet.SigTypePositiveCert,
-			PubKeyAlgo:   pgpPrivateKey.PublicKey.PubKeyAlgo,
-			Hash:         digestHash,
-			CreationTime: *kmsKey.Description.KeyMetadata.CreationDate,
-			IssuerKeyId:  &pgpPrivateKey.PublicKey.KeyId,
-		},
-	}
-
-	// Sign the user ID with the primary key
-	err := identity.SelfSignature.SignUserId(userId.Id, &pgpPrivateKey.PublicKey, entity.PrivateKey, &packet.Config{
-		DefaultHash: digestHash,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign user ID: %w", err)
-	}
-
-	entity.Identities[userId.Name] = identity
-
-	// Sign the data
+	var err error
 	var signature bytes.Buffer
 	if armor {
 		err = openpgp.ArmoredDetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
