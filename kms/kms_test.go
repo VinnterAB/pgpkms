@@ -197,7 +197,3 @@ func TestKMSSigner_Public_InvalidKey(t *testing.T) {
 	}()
 	signer.Public()
 }
-
-// Note: KMSSigner signing tests would require complex AWS API mocking
-// These would be better suited as integration tests with real AWS KMS
-// For unit tests, we focus on the interface-level behavior
