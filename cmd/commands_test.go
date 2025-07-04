@@ -245,7 +245,7 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, false, false)
+		signedData, err := signData(mockClient, keyId, testData, false, false, crypto.SHA256)
 		assert.NilError(t, err)
 
 		err = writeOutput(os.Stdout, signedData)
@@ -278,7 +278,7 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, true, true)
+		signedData, err := signData(mockClient, keyId, testData, true, true, crypto.SHA256)
 		assert.NilError(t, err)
 
 		err = writeOutput(os.Stdout, signedData)
@@ -304,7 +304,7 @@ func TestSignCommand(t *testing.T) {
 		keyId := "test-key-id"
 		testData := []byte("Hello, World!")
 
-		_, err := signData(mockClient, keyId, testData, false, false)
+		_, err := signData(mockClient, keyId, testData, false, false, crypto.SHA256)
 		assert.ErrorContains(t, err, "KMS signing failed")
 	})
 }
@@ -353,6 +353,34 @@ func TestExecuteFunction(t *testing.T) {
 		opts.User = keyId
 		opts.Export = true
 		opts.Sign = true
+
+		err := Execute(mockClient)
+		assert.ErrorContains(t, err, "conflicting commands")
+	})
+
+	t.Run("Conflicting detached-sign and clear-sign error", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		// Set conflicting options
+		keyId := "test-key-id"
+		opts.User = keyId
+		opts.DetachedSign = true
+		opts.ClearSign = true
+
+		err := Execute(mockClient)
+		assert.ErrorContains(t, err, "conflicting commands")
+	})
+
+	t.Run("Conflicting detached-sign and clear-sign alias error", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		// Set conflicting options
+		keyId := "test-key-id"
+		opts.User = keyId
+		opts.DetachedSign = true
+		opts.ClearSignAlias = true
 
 		err := Execute(mockClient)
 		assert.ErrorContains(t, err, "conflicting commands")
@@ -758,4 +786,131 @@ func TestStdoutWriteCloser(t *testing.T) {
 		err := writer.Close()
 		assert.NilError(t, err)
 	})
+}
+
+func TestParseDigestAlgo(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected crypto.Hash
+		hasError bool
+	}{
+		{"", crypto.SHA256, false},
+		{"sha256", crypto.SHA256, false},
+		{"SHA256", crypto.SHA256, false},
+		{"sha1", crypto.SHA1, false},
+		{"SHA1", crypto.SHA1, false},
+		{"sha384", crypto.SHA384, false},
+		{"SHA384", crypto.SHA384, false},
+		{"sha512", crypto.SHA512, false},
+		{"SHA512", crypto.SHA512, false},
+		{"invalid", crypto.SHA256, true},
+		{"md5", crypto.SHA256, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("Input: %s", tc.input), func(t *testing.T) {
+			result, err := parseDigestAlgo(tc.input)
+			if tc.hasError {
+				assert.ErrorContains(t, err, "unsupported digest algorithm")
+			} else {
+				assert.NilError(t, err)
+				assert.Equal(t, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestSignWithDifferentDigestAlgos(t *testing.T) {
+	// Reset opts before each test
+	defer func() { opts = Opts{} }()
+
+	digestAlgos := []struct {
+		name string
+		algo string
+		hash crypto.Hash
+	}{
+		{"SHA1", "sha1", crypto.SHA1},
+		{"SHA256", "sha256", crypto.SHA256},
+		{"SHA384", "sha384", crypto.SHA384},
+		{"SHA512", "sha512", crypto.SHA512},
+		{"Default", "", crypto.SHA256},
+	}
+
+	for _, digestTest := range digestAlgos {
+		t.Run(fmt.Sprintf("Sign with %s digest", digestTest.name), func(t *testing.T) {
+			opts = Opts{}
+			mockClient := NewMockKmsClient()
+
+			// Create a temporary input file
+			tmpFile, err := os.CreateTemp("", "test-input-*.txt")
+			assert.NilError(t, err)
+			defer os.Remove(tmpFile.Name())
+
+			testData := "Hello, World!"
+			_, err = tmpFile.WriteString(testData)
+			assert.NilError(t, err)
+			tmpFile.Close()
+
+			// Set output file explicitly to enable file output
+			outputFile := tmpFile.Name() + ".asc"
+			defer os.Remove(outputFile)
+
+			keyId := "test-key-id"
+			opts.Sign = true
+			opts.User = keyId
+			opts.Output = &outputFile
+			opts.DigestAlgo = digestTest.algo
+
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+			assert.NilError(t, err)
+
+			// Check that output file was created
+			_, err = os.Stat(outputFile)
+			assert.NilError(t, err, "Output file should be created")
+
+			// Verify the file has content (signature was generated)
+			outputData, err := os.ReadFile(outputFile)
+			assert.NilError(t, err)
+			assert.Assert(t, len(outputData) > 0, "Output file should have signature data")
+		})
+
+		t.Run(fmt.Sprintf("Clear sign with %s digest", digestTest.name), func(t *testing.T) {
+			opts = Opts{}
+			mockClient := NewMockKmsClient()
+
+			// Create a temporary input file
+			tmpFile, err := os.CreateTemp("", "test-input-*.txt")
+			assert.NilError(t, err)
+			defer os.Remove(tmpFile.Name())
+
+			testData := "Hello, World!"
+			_, err = tmpFile.WriteString(testData)
+			assert.NilError(t, err)
+			tmpFile.Close()
+
+			// Set output file explicitly to enable file output
+			outputFile := tmpFile.Name() + ".asc"
+			defer os.Remove(outputFile)
+
+			keyId := "test-key-id"
+			opts.ClearSign = true
+			opts.User = keyId
+			opts.Output = &outputFile
+			opts.DigestAlgo = digestTest.algo
+
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+			assert.NilError(t, err)
+
+			// Check that output file was created
+			_, err = os.Stat(outputFile)
+			assert.NilError(t, err, "Output file should be created")
+
+			// Verify clear sign format
+			outputData, err := os.ReadFile(outputFile)
+			assert.NilError(t, err)
+			outputString := string(outputData)
+			assert.Assert(t, strings.Contains(outputString, ClearSignHeader), "Should contain clear sign header")
+			assert.Assert(t, strings.Contains(outputString, testData), "Should contain original data")
+		})
+	}
 }

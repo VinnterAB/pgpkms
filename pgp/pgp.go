@@ -103,7 +103,7 @@ func serialize(entity *openpgp.Entity, armored bool) (*bytes.Buffer, error) {
 }
 
 // SignData signs data using the provided KMS key and signer
-func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSign, armor bool) ([]byte, error) {
+func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSign, armor bool, digestHash crypto.Hash) ([]byte, error) {
 	pubKeyAny := signer.Public()
 
 	creationDate := kmsKey.Description.KeyMetadata.CreationDate
@@ -123,16 +123,16 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSig
 	}
 
 	if clearSign {
-		return clearSignData(pgpPrivateKey, data)
+		return clearSignData(pgpPrivateKey, data, digestHash)
 	}
 
-	return detachedSignature(kmsKey, pgpPrivateKey, data, armor)
+	return detachedSignature(kmsKey, pgpPrivateKey, data, armor, digestHash)
 }
 
-func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte) ([]byte, error) {
+func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash crypto.Hash) ([]byte, error) {
 	var signature bytes.Buffer
 	writer, err := clearsign.Encode(&signature, pgpPrivateKey, &packet.Config{
-		DefaultHash: crypto.SHA256,
+		DefaultHash: digestHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
@@ -145,7 +145,7 @@ func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte) ([]byte, error
 	return signature.Bytes(), nil
 }
 
-func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, data []byte, armor bool) ([]byte, error) {
+func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, data []byte, armor bool, digestHash crypto.Hash) ([]byte, error) {
 	// Create a default user ID for signing
 	userId := packet.NewUserId(fmt.Sprintf("AWS KMS Key for %s", *kmsKey.Description.KeyMetadata.Arn), "", "")
 
@@ -161,7 +161,7 @@ func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, 
 		SelfSignature: &packet.Signature{
 			SigType:      packet.SigTypePositiveCert,
 			PubKeyAlgo:   pgpPrivateKey.PublicKey.PubKeyAlgo,
-			Hash:         crypto.SHA256,
+			Hash:         digestHash,
 			CreationTime: *kmsKey.Description.KeyMetadata.CreationDate,
 			IssuerKeyId:  &pgpPrivateKey.PublicKey.KeyId,
 		},
@@ -169,7 +169,7 @@ func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, 
 
 	// Sign the user ID with the primary key
 	err := identity.SelfSignature.SignUserId(userId.Id, &pgpPrivateKey.PublicKey, entity.PrivateKey, &packet.Config{
-		DefaultHash: crypto.SHA256,
+		DefaultHash: digestHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign user ID: %w", err)
@@ -181,11 +181,11 @@ func detachedSignature(kmsKey *kms.PublicKey, pgpPrivateKey *packet.PrivateKey, 
 	var signature bytes.Buffer
 	if armor {
 		err = openpgp.ArmoredDetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
-			DefaultHash: crypto.SHA256,
+			DefaultHash: digestHash,
 		})
 	} else {
 		err = openpgp.DetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
-			DefaultHash: crypto.SHA256,
+			DefaultHash: digestHash,
 		})
 	}
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,22 @@ import (
 	"github.com/vinnterab/pgpkms/pgp"
 )
 
+// parseDigestAlgo converts string to crypto.Hash
+func parseDigestAlgo(algo string) (crypto.Hash, error) {
+	switch strings.ToLower(algo) {
+	case "", "sha256":
+		return crypto.SHA256, nil
+	case "sha1":
+		return crypto.SHA1, nil
+	case "sha384":
+		return crypto.SHA384, nil
+	case "sha512":
+		return crypto.SHA512, nil
+	default:
+		return crypto.SHA256, fmt.Errorf("unsupported digest algorithm: %s", algo)
+	}
+}
+
 func Sign(client kms.Client, opts *Opts, args []string) error {
 	if opts.ClearSignAlias {
 		opts.ClearSign = true
@@ -17,6 +34,12 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 
 	if opts.ArmorAlias {
 		opts.Armor = true
+	}
+
+	// Parse digest algorithm
+	digestHash, err := parseDigestAlgo(opts.DigestAlgo)
+	if err != nil {
+		return err
 	}
 
 	// Determine input source
@@ -33,7 +56,7 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	defer writer.Close()
 
 	// Sign the data
-	signature, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor)
+	signature, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor, digestHash)
 	if err != nil {
 		return err
 	}
@@ -56,7 +79,7 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 }
 
 // signData signs the input data using KMS and returns the signed data
-func signData(client kms.Client, keyId string, inputData []byte, clearSign, armor bool) ([]byte, error) {
+func signData(client kms.Client, keyId string, inputData []byte, clearSign, armor bool, digestHash crypto.Hash) ([]byte, error) {
 	// Get KMS key
 	key, err := client.GetKey(keyId)
 	if err != nil {
@@ -64,7 +87,7 @@ func signData(client kms.Client, keyId string, inputData []byte, clearSign, armo
 	}
 
 	// Sign the data
-	signedData, err := pgp.SignData(key.PublicKey, key.PrivateKey, inputData, clearSign, armor)
+	signedData, err := pgp.SignData(key.PublicKey, key.PrivateKey, inputData, clearSign, armor, digestHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign data: %w", err)
 	}
