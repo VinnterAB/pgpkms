@@ -89,15 +89,19 @@ Usage:
   pgpkms [OPTIONS]
 
 Application Options:
+  -b, --detach-sign     Make a detched signature
   -a, --armor           Use ASCII Armoured format for the output
+      --armour          Alias for --armor
       --export          Export a public part of a KMS key in a PGP Key Block
       --export-name     Name to use for the exported PGP key (used with --export)
       --export-email    Email to use for the exported PGP key (used with --export)
       --export-comment  Comment to use for the exported PGP key (used with --export)
-      --sign            Sign a file using KMS key
+  -s, --sign            Sign a file using KMS key
       --clear-sign      Create a clear text signature using KMS key
+      --clearsign       Alias for --clear-sign
   -o, --output          Output file (default: input file + .asc)
   -u, --local-user      The key ID to use
+      --digest-algo     Digest algorithm to use (sha1, sha256, sha384, sha512) (default: sha256)
 
 Help Options:
   -h, --help            Show this help message
