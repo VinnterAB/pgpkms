@@ -30,8 +30,6 @@ func NewAWSKmsClient(cfg aws.Config) *AWSKmsClient {
 
 // GetKey retrieves a KMS key and returns both public and private key components
 func (c *AWSKmsClient) GetKey(keyId string) (*Key, error) {
-	fmt.Printf("Exporting %s\n", keyId)
-
 	ctx := context.Background()
 	keyDescription, err := c.client.DescribeKey(ctx, &kms.DescribeKeyInput{
 		KeyId: &keyId,
