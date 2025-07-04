@@ -134,19 +134,3 @@ func (s *KMSSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) 
 
 	return result.Signature, nil
 }
-
-// Example of how to create a mock for testing:
-//
-// type MockClient struct{}
-//
-// func (m *MockClient) GetKey(keyId string) (*Key, error) {
-//     // Return mock data
-//     return &Key{
-//         PublicKey: &PublicKey{...},
-//         PrivateKey: &MockSigner{...},
-//     }, nil
-// }
-//
-// In tests, you can pass the mock to cmd.Execute:
-// mockClient := &MockClient{}
-// err := cmd.Execute(mockClient)
