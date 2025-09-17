@@ -64,7 +64,6 @@ func Execute(client kms.Client) error {
 	}
 
 	if opts.Export {
-		fmt.Println("Will do export")
 		return ExportKey(client, &opts, args)
 	}
 
