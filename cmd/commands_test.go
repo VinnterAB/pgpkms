@@ -119,10 +119,14 @@ func TestExportCommand(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should contain PGP key data
@@ -153,10 +157,14 @@ func TestExportCommand(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should contain armored PGP key
@@ -187,10 +195,14 @@ func TestExportCommand(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should contain armored PGP key
@@ -252,10 +264,14 @@ func TestSignCommand(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.Bytes()
 
 		// Should have signature data
@@ -285,10 +301,14 @@ func TestSignCommand(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should contain clear signed data
@@ -333,10 +353,14 @@ func TestExecuteFunction(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should show usage/help
@@ -406,10 +430,14 @@ func TestExecuteFunction(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
+
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
+
 		output := buf.String()
 
 		// Should contain key export output
@@ -428,16 +456,25 @@ func TestSign(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 		assert.NilError(t, err)
-		defer os.Remove(tmpFile.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFile.Name()); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		testData := "Hello, World!"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		err = tmpFile.Close()
+		assert.NilError(t, err)
 
 		// Set output file explicitly to enable file output
 		outputFile := tmpFile.Name() + ".asc"
-		defer os.Remove(outputFile)
+		t.Cleanup(func() {
+			if err := os.Remove(outputFile); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		keyId := "test-key-id"
 		opts.Sign = true
@@ -459,16 +496,25 @@ func TestSign(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 		assert.NilError(t, err)
-		defer os.Remove(tmpFile.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFile.Name()); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		testData := "Hello, World!"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		err = tmpFile.Close()
+		assert.NilError(t, err)
 
 		// Set output file explicitly to enable file output
 		outputFile := tmpFile.Name() + ".asc"
-		defer os.Remove(outputFile)
+		t.Cleanup(func() {
+			if err := os.Remove(outputFile); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		keyId := "test-key-id"
 		opts.ClearSign = true
@@ -493,16 +539,25 @@ func TestSign(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 		assert.NilError(t, err)
-		defer os.Remove(tmpFile.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFile.Name()); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		testData := "Hello, World!"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		err = tmpFile.Close()
+		assert.NilError(t, err)
 
 		// Set output file explicitly to enable file output
 		outputFile := tmpFile.Name() + ".asc"
-		defer os.Remove(outputFile)
+		t.Cleanup(func() {
+			if err := os.Remove(outputFile); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		keyId := "test-key-id"
 		opts.ClearSignAlias = true
@@ -528,16 +583,25 @@ func TestSign(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 		assert.NilError(t, err)
-		defer os.Remove(tmpFile.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFile.Name()); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		testData := "Hello, World!"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		err = tmpFile.Close()
+		assert.NilError(t, err)
 
 		// Create temporary output file name
 		outputFile := tmpFile.Name() + ".sig"
-		defer os.Remove(outputFile)
+		t.Cleanup(func() {
+			if err := os.Remove(outputFile); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		keyId := "test-key-id"
 		opts.Sign = true
@@ -613,10 +677,12 @@ func TestWriteOutput(t *testing.T) {
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
 
 		assert.DeepEqual(t, buf.Bytes(), testData)
 	})
@@ -633,7 +699,12 @@ func TestDetermineOutputWriter(t *testing.T) {
 
 		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
-		defer writer.Close()
+
+		t.Cleanup(func() {
+			if err := writer.Close(); err != nil {
+				t.Logf("close failed: %v", err)
+			}
+		})
 
 		assert.Equal(t, outputFile, "")
 		_, ok := writer.(stdoutWriteCloser)
@@ -647,10 +718,15 @@ func TestDetermineOutputWriter(t *testing.T) {
 
 		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
-		defer func() {
-			writer.Close()
-			os.Remove(outputFile)
-		}()
+
+		t.Cleanup(func() {
+			if err := writer.Close(); err != nil {
+				t.Logf("close failed: %v", err)
+			}
+			if err := os.Remove(outputFile); err != nil {
+				t.Logf("remove failed: %v", err)
+			}
+		})
 
 		assert.Equal(t, outputFile, "test.txt.asc")
 		_, ok := writer.(*os.File)
@@ -663,7 +739,11 @@ func TestDetermineOutputWriter(t *testing.T) {
 		// Create temporary directory for test
 		tmpDir, err := os.MkdirTemp("", "output-test-*")
 		assert.NilError(t, err)
-		defer os.RemoveAll(tmpDir)
+		t.Cleanup(func() {
+			if err := os.RemoveAll(tmpDir); err != nil {
+				t.Logf("tmpDir cleanup failed: %v", err)
+			}
+		})
 
 		customOutput := tmpDir + "/custom.sig"
 		opts.Output = &customOutput
@@ -672,7 +752,11 @@ func TestDetermineOutputWriter(t *testing.T) {
 
 		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
-		defer writer.Close()
+		t.Cleanup(func() {
+			if err := writer.Close(); err != nil {
+				t.Logf("writer cleanup failed: %v", err)
+			}
+		})
 
 		assert.Equal(t, outputFile, customOutput)
 		_, ok := writer.(*os.File)
@@ -695,8 +779,14 @@ func TestDetermineOutputWriter(t *testing.T) {
 		tmpFile, err := os.CreateTemp("", "existing-*.txt")
 		assert.NilError(t, err)
 		tmpFileName := tmpFile.Name()
-		defer os.Remove(tmpFileName)
-		tmpFile.Close()
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFileName); err != nil {
+				t.Logf("tempfile cleanup failed: %v", err)
+			}
+			if err := tmpFile.Close(); err != nil {
+				t.Logf("tempfile close failed: %v", err)
+			}
+		})
 
 		args := []string{"test.txt"}
 		inputName := "test.txt"
@@ -712,12 +802,17 @@ func TestDetermineInputSource(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 		assert.NilError(t, err)
-		defer os.Remove(tmpFile.Name())
+		t.Cleanup(func() {
+			if err := os.Remove(tmpFile.Name()); err != nil {
+				t.Logf("tempfile cleanup failed: %v", err)
+			}
+		})
 
 		testData := "Hello, World!"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		err = tmpFile.Close()
+		assert.NilError(t, err)
 
 		args := []string{tmpFile.Name()}
 		inputData, inputName, err := determineInputSource(args)
@@ -736,8 +831,14 @@ func TestDetermineInputSource(t *testing.T) {
 
 		// Write test data to the pipe
 		go func() {
-			defer w.Close()
-			w.Write([]byte(testData))
+			defer func() {
+				if err := w.Close(); err != nil {
+					t.Logf("close failed: %v", err)
+				}
+			}()
+			if _, err := w.Write([]byte(testData)); err != nil {
+				t.Logf("write failed: %v", err)
+			}
 		}()
 
 		args := []string{} // No file argument
@@ -773,10 +874,12 @@ func TestStdoutWriteCloser(t *testing.T) {
 		assert.Equal(t, n, len(testData))
 
 		// Restore stdout and read output
-		w.Close()
+		err = w.Close()
+		assert.NilError(t, err)
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, err = io.Copy(&buf, r)
+		assert.NilError(t, err)
 
 		assert.DeepEqual(t, buf.Bytes(), testData)
 	})
@@ -844,16 +947,26 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			// Create a temporary input file
 			tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 			assert.NilError(t, err)
-			defer os.Remove(tmpFile.Name())
+
+			t.Cleanup(func() {
+				if err := os.Remove(tmpFile.Name()); err != nil {
+					t.Logf("tempfile cleanup failed: %v", err)
+				}
+			})
 
 			testData := "Hello, World!"
 			_, err = tmpFile.WriteString(testData)
 			assert.NilError(t, err)
-			tmpFile.Close()
+			err = tmpFile.Close()
+			assert.NilError(t, err)
 
 			// Set output file explicitly to enable file output
 			outputFile := tmpFile.Name() + ".asc"
-			defer os.Remove(outputFile)
+			t.Cleanup(func() {
+				if err := os.Remove(outputFile); err != nil {
+					t.Logf("outputfile cleanup failed: %v", err)
+				}
+			})
 
 			keyId := "test-key-id"
 			opts.Sign = true
@@ -881,16 +994,25 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			// Create a temporary input file
 			tmpFile, err := os.CreateTemp("", "test-input-*.txt")
 			assert.NilError(t, err)
-			defer os.Remove(tmpFile.Name())
+			t.Cleanup(func() {
+				if err := os.Remove(tmpFile.Name()); err != nil {
+					t.Logf("tempfile cleanup failed: %v", err)
+				}
+			})
 
 			testData := "Hello, World!"
 			_, err = tmpFile.WriteString(testData)
 			assert.NilError(t, err)
-			tmpFile.Close()
+			err = tmpFile.Close()
+			assert.NilError(t, err)
 
 			// Set output file explicitly to enable file output
 			outputFile := tmpFile.Name() + ".asc"
-			defer os.Remove(outputFile)
+			t.Cleanup(func() {
+				if err := os.Remove(outputFile); err != nil {
+					t.Logf("outputfile cleanup failed: %v", err)
+				}
+			})
 
 			keyId := "test-key-id"
 			opts.ClearSign = true

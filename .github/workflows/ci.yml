@@ -1,5 +1,11 @@
-name: Go
-on: [push]
+name: Go Build & Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -15,5 +21,11 @@ jobs:
         run: go get .
       - name: Build
         run: go build -v ./...
+      - name: Vet (static analysis)
+        run: go vet ./...
+      - name: Run linters
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
       - name: Test with coverage
         run: go test -cover ./...

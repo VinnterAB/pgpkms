@@ -53,7 +53,12 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer writer.Close()
+
+	defer func() {
+		if cerr := writer.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "error closing writer: %v\n", cerr)
+		}
+	}()
 
 	// Sign the data
 	signature, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor, digestHash)
