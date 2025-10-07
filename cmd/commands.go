@@ -60,7 +60,7 @@ func Execute(client kms.Client) error {
 
 	// these require a key
 	if (opts.Export || opts.Sign || opts.ClearSign) && opts.User == "" {
-		return errors.New("Specify the key id with -u/--local-user ")
+		return errors.New("specify the key id with -u/--local-user ")
 	}
 
 	if opts.Export {
