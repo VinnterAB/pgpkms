@@ -85,18 +85,6 @@ func createTestECDSAKey() (*ecdsa.PrivateKey, []byte, error) {
 	return privateKey, pubKeyBytes, nil
 }
 
-// Helper function to create a valid RSA public key for testing
-func createTestRSAKey() ([]byte, error) {
-	// For simplicity, we'll create an ECDSA key and marshal it
-	// In a real scenario, you'd create an RSA key
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-
-	return x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-}
-
 func TestNewAWSKmsClient(t *testing.T) {
 	// Create a minimal AWS config for testing
 	cfg := aws.Config{

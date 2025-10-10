@@ -3,6 +3,7 @@ package pgp
 import (
 	"bytes"
 	"crypto"
+	"errors"
 	"fmt"
 	"io"
 
@@ -10,9 +11,13 @@ import (
 	"crypto/rsa"
 
 	"github.com/vinnterab/pgpkms/kms"
+	//nolint:staticcheck // SA1019: required for OpenPGP interoperability; planned migration later
 	"golang.org/x/crypto/openpgp"
+	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
 	"golang.org/x/crypto/openpgp/armor"
+	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
 	"golang.org/x/crypto/openpgp/clearsign"
+	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
 	"golang.org/x/crypto/openpgp/packet"
 )
 
@@ -136,10 +141,13 @@ func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash cry
 		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
 	}
 	if _, err = writer.Write(data); err != nil {
-		writer.Close()
-		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
+		cerr := writer.Close()
+		return nil, errors.Join(fmt.Errorf("failed to write to clearsign encoder: %w", err), cerr)
 	}
-	writer.Close()
+
+	if cerr := writer.Close(); cerr != nil {
+		return nil, fmt.Errorf("failed to close clearsign encoder: %w", cerr)
+	}
 	return signature.Bytes(), nil
 }
 

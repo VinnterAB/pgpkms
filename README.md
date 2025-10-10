@@ -1,5 +1,7 @@
 # PGP KMS
 
+[![Go](https://github.com/VinnterAB/pgpkms/actions/workflows/ci.yml/badge.svg)](https://github.com/VinnterAB/pgpkms/actions/workflows/ci.yml)
+
 A Go command-line tool that integrates AWS Key Management Service (KMS) with PGP cryptography, enabling you to use AWS KMS asymmetric keys for PGP signing operations and export KMS public keys as PGP-compatible key blocks.
 
 This project is inspired by https://github.com/hf/kmspgp, but tries to mimic the gpg command line interface and implements clearsign.
@@ -206,6 +208,8 @@ go test -v ./...
 
 ### Code Quality
 
+This project uses **[GolangCI-Lint](https://golangci-lint.run/)** for linting Go code. It helps maintain clean, idiomatic, and error-free code by running multiple linters efficiently. You can install **GolangCI-Lint** by following the official instructions [here](https://golangci-lint.run/docs/welcome/install/#binaries).
+
 ```bash
 # Format code
 go fmt ./...
@@ -215,6 +219,9 @@ go vet ./...
 
 # Build
 go build -o pgpkms
+
+# golangci-lint
+golangci-lint run ./...
 ```
 
 ## Security Considerations
