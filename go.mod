@@ -3,11 +3,11 @@ module github.com/vinnterab/pgpkms
 go 1.22.1
 
 require (
-	github.com/ProtonMail/go-crypto v1.3.0
 	github.com/aws/aws-sdk-go-v2 v1.36.5
 	github.com/aws/aws-sdk-go-v2/config v1.29.17
 	github.com/aws/aws-sdk-go-v2/service/kms v1.41.2
 	github.com/jessevdk/go-flags v1.6.1
+	golang.org/x/crypto v0.33.0
 	gotest.tools/v3 v3.5.2
 )
 
@@ -23,8 +23,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.0 // indirect
 	github.com/aws/smithy-go v1.22.4 // indirect
-	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 )
