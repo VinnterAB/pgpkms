@@ -58,7 +58,7 @@ func (m *MockKmsClient) WithError(msg string) *MockKmsClient {
 
 func (m *MockKmsClient) GetKey(keyId string) (*kmslib.Key, error) {
 	if m.shouldError {
-		return nil, fmt.Errorf(m.errorMsg)
+		return nil, fmt.Errorf("%s", m.errorMsg)
 	}
 
 	// Create a mock KMS public key
