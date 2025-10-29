@@ -18,7 +18,7 @@ This project is inspired by https://github.com/hf/kmspgp, but tries to mimic the
 
 ### Prerequisites
 
-- Go 1.22.1 or later
+- Go 1.24.0 or later
 - AWS credentials configured (via AWS CLI, environment variables, or IAM roles)
 - AWS KMS asymmetric key (RSA or ECDSA) with `SIGN_VERIFY` usage
 
