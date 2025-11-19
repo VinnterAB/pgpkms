@@ -49,7 +49,7 @@ jobs:
       # Upload BoM for pull requests
       - name: Upload BoM for PR
         id: prUpload
-        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
         uses: VinnterAB/dependency-tracker-action@v0.0.3
         with:
           url: ${{ vars.DTRACK_URL }}
