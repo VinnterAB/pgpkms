@@ -30,13 +30,41 @@ jobs:
       - name: Test with coverage
         run: go test -cover ./...
       # Generates a BoM and uploads it to OWASP Dependency Track
+      # Only runs on main branch or version tags (v*)
       - name: Generates BoM and upload to OWASP DTrack
         id: riskscoreFromDT
-        uses:  VinnterAB/dependency-tracker-action@v0.0.1
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses:  VinnterAB/dependency-tracker-action@v0.0.4
         with:
           url: ${{ vars.DTRACK_URL }}
           key: '${{ secrets.DTRACK_KEY }}'
           language: 'golang'
-      # Show the risk score output 
+          version: ${{ github.ref == 'refs/heads/main' && 'latest' || github.ref_name }}
+          action: 'upload'
+          isLatest: ${{ github.ref == 'refs/heads/main' }}
+      # Show the risk score output
       - name: Get the output time
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         run: echo "The risk score of the project is ${{ steps.riskscoreFromDT.outputs.riskscore }}"
+      # Upload BoM for pull requests
+      - name: Upload BoM for PR
+        id: prUpload
+        if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
+        uses: VinnterAB/dependency-tracker-action@v0.0.4
+        with:
+          url: ${{ vars.DTRACK_URL }}
+          key: '${{ secrets.DTRACK_KEY }}'
+          language: 'golang'
+          version: PR-${{ github.event.pull_request.number }}
+          action: 'upload'
+          isLatest: 'false'
+      # Delete BoM when PR is closed
+      - name: Delete BoM for closed PR
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        uses: VinnterAB/dependency-tracker-action@v0.0.4
+        with:
+          url: ${{ vars.DTRACK_URL }}
+          key: '${{ secrets.DTRACK_KEY }}'
+          language: 'golang'
+          version: PR-${{ github.event.pull_request.number }}
+          action: 'delete'
