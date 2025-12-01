@@ -34,7 +34,7 @@ jobs:
       - name: Generates BoM and upload to OWASP DTrack
         id: riskscoreFromDT
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
-        uses:  VinnterAB/dependency-tracker-action@v0.0.4
+        uses:  VinnterAB/dependency-tracker-action@v0.0.5
         with:
           url: ${{ vars.DTRACK_URL }}
           key: '${{ secrets.DTRACK_KEY }}'
@@ -50,7 +50,7 @@ jobs:
       - name: Upload BoM for PR
         id: prUpload
         if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
-        uses: VinnterAB/dependency-tracker-action@v0.0.4
+        uses: VinnterAB/dependency-tracker-action@v0.0.5
         with:
           url: ${{ vars.DTRACK_URL }}
           key: '${{ secrets.DTRACK_KEY }}'
@@ -61,7 +61,7 @@ jobs:
       # Delete BoM when PR is closed
       - name: Delete BoM for closed PR
         if: github.event_name == 'pull_request' && github.event.action == 'closed'
-        uses: VinnterAB/dependency-tracker-action@v0.0.4
+        uses: VinnterAB/dependency-tracker-action@v0.0.5
         with:
           url: ${{ vars.DTRACK_URL }}
           key: '${{ secrets.DTRACK_KEY }}'
