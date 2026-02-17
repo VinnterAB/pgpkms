@@ -152,6 +152,10 @@ pgpkms --sign $KMS_KEY_ARN release.tar.gz
 pgpkms --sign $KMS_KEY_ARN release.tar.gz -o release.tar.gz.sig
 ```
 
+### Replacing gpg in toolchains
+
+The `pgpkms` cli is a clone of the [`gpg`](https://www.gnupg.org/) cli. This means that tools calling `gpg` can instead call `pgpkms` without any changes. A way to achieve that is symlink `pgpkms` to for instance `/usr/local/bin/gpg` in a build container/image.
+
 ## AWS Authentication
 
 pgpkms uses the standard AWS SDK credential chain:
