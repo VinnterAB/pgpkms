@@ -329,6 +329,17 @@ func TestSignCommand(t *testing.T) {
 	})
 }
 
+func TestVersionOutput(t *testing.T) {
+	output := VersionString()
+	lines := strings.Split(output, "\n")
+
+	assert.Assert(t, strings.Contains(lines[0], "gpg (GnuPG) 2.4.4"), "First line should contain gpg version")
+	assert.Assert(t, strings.Contains(lines[1], "libgcrypt 1.10.3"), "Second line should contain libgcrypt version")
+	assert.Assert(t, strings.Contains(output, "pgpkms"), "Output should contain pgpkms")
+	assert.Assert(t, strings.Contains(output, "MIT"), "Output should contain MIT license")
+	assert.Assert(t, strings.Contains(output, "Vinnter AB"), "Output should contain Vinnter AB copyright")
+}
+
 func TestExecuteFunction(t *testing.T) {
 	// Save original args and restore after test
 	originalArgs := os.Args

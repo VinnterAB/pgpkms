@@ -38,6 +38,11 @@ func Execute(client kms.Client) error {
 		os.Exit(1)
 	}
 
+	if opts.Version {
+		fmt.Print(VersionString())
+		return nil
+	}
+
 	if opts.ArmorAlias {
 		opts.Armor = true
 	}
