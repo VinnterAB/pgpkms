@@ -20,6 +20,21 @@ func replaceEqualSigns(helptext string) string {
 	return strings.ReplaceAll(helptext, "=", " ")
 }
 
+var validCharsets = map[string]bool{
+	"utf-8":       true,
+	"iso-8859-1":  true,
+	"iso-8859-2":  true,
+	"iso-8859-15": true,
+	"koi8-r":      true,
+}
+
+func validateCharset(charset string) error {
+	if !validCharsets[strings.ToLower(charset)] {
+		return fmt.Errorf("invalid charset: %s", charset)
+	}
+	return nil
+}
+
 func Execute(client kms.Client) error {
 	parser := flags.NewParser(&opts, flags.Default&^flags.PrintErrors)
 
@@ -41,6 +56,12 @@ func Execute(client kms.Client) error {
 	if opts.Version {
 		fmt.Print(VersionString())
 		return nil
+	}
+
+	if opts.Charset != nil {
+		if err := validateCharset(*opts.Charset); err != nil {
+			return err
+		}
 	}
 
 	sw := NewStatusWriter(opts.StatusFd, opts.ExitOnStatusWriteError)

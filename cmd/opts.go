@@ -20,5 +20,6 @@ type Opts struct {
 	StatusFd               *int    `long:"status-fd" description:"Write status info to this file descriptor"`
 	EnableProgressFilter   bool    `long:"enable-progress-filter" description:"Enable progress indicator reporting"`
 	ExitOnStatusWriteError bool    `long:"exit-on-status-write-error" description:"Exit if writing to status-fd fails"`
-	LoggerFd               *int   `long:"logger-fd" description:"Write log info to this file descriptor"`
+	LoggerFd               *int    `long:"logger-fd" description:"Write log info to this file descriptor"`
+	Charset                *string `long:"charset" description:"Character set for display (accepted for GPG compatibility)"`
 }
