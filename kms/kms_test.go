@@ -19,7 +19,8 @@ import (
 
 // MockClient implements the Client interface for testing
 type MockClient struct {
-	getKeyFunc func(keyId string) (*Key, error)
+	getKeyFunc   func(keyId string) (*Key, error)
+	listKeysFunc func() ([]*PublicKey, error)
 }
 
 func (m *MockClient) GetKey(keyId string) (*Key, error) {
@@ -55,6 +56,13 @@ func (m *MockClient) GetKey(keyId string) (*Key, error) {
 		PublicKey:  publicKey,
 		PrivateKey: &TestSigner{privateKey: privateKey},
 	}, nil
+}
+
+func (m *MockClient) ListKeys() ([]*PublicKey, error) {
+	if m.listKeysFunc != nil {
+		return m.listKeysFunc()
+	}
+	return nil, nil
 }
 
 // TestSigner implements crypto.Signer for testing

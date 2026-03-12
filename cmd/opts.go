@@ -14,5 +14,7 @@ type Opts struct {
 	Output         *string `short:"o" long:"output" description:"Output file (default: input file + .asc)"`
 	User           string  `short:"u" long:"local-user" description:"The key ID to use"`
 	DigestAlgo     string  `long:"digest-algo" description:"Digest algorithm to use (sha1, sha256, sha384, sha512)" default:"sha256"`
+	ListSecretKeys bool    `short:"K" long:"list-secret-keys" description:"List secret keys"`
+	WithColons     bool    `long:"with-colons" description:"Print key listings delimited by colons"`
 	Version        bool    `long:"version" description:"Display version information"`
 }

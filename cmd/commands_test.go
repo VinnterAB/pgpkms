@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
 	"io"
@@ -42,8 +43,9 @@ func (m *MockSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts)
 
 // MockKmsClient implements kms.Client for testing
 type MockKmsClient struct {
-	shouldError bool
-	errorMsg    string
+	shouldError  bool
+	errorMsg     string
+	listKeysFunc func() ([]*kmslib.PublicKey, error)
 }
 
 func NewMockKmsClient() *MockKmsClient {
@@ -91,6 +93,16 @@ func (m *MockKmsClient) GetKey(keyId string) (*kmslib.Key, error) {
 		PublicKey:  publicKey,
 		PrivateKey: mockSigner,
 	}, nil
+}
+
+func (m *MockKmsClient) ListKeys() ([]*kmslib.PublicKey, error) {
+	if m.listKeysFunc != nil {
+		return m.listKeysFunc()
+	}
+	if m.shouldError {
+		return nil, fmt.Errorf("%s", m.errorMsg)
+	}
+	return nil, nil
 }
 
 func TestExportCommand(t *testing.T) {
@@ -1046,4 +1058,167 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			assert.Assert(t, strings.Contains(outputString, testData), "Should contain original data")
 		})
 	}
+}
+
+func createMockPublicKey(keyId, keyArn string, keySpec types.KeySpec, tags map[string]string) *kmslib.PublicKey {
+	creationDate := time.Date(2026, 1, 13, 12, 19, 57, 0, time.UTC)
+
+	var pubKeyBytes []byte
+	switch keySpec {
+	case types.KeySpecRsa2048, types.KeySpecRsa3072, types.KeySpecRsa4096:
+		rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+		pubKeyBytes, _ = x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
+	default:
+		mockSigner := NewMockSigner()
+		pubKey := mockSigner.Public().(*ecdsa.PublicKey)
+		pubKeyBytes, _ = x509.MarshalPKIXPublicKey(pubKey)
+	}
+
+	return &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &creationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: pubKeyBytes,
+			KeySpec:   keySpec,
+		},
+		Tags: tags,
+	}
+}
+
+func TestListSecretKeys(t *testing.T) {
+	defer func() { opts = Opts{} }()
+
+	t.Run("HumanReadable", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{
+				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+					types.KeySpecEccNistP256, map[string]string{"PGPName": "OSTree Key", "PGPEmail": "ostree@hydroware.local"}),
+			}, nil
+		}
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := ListSecretKeys(mockClient, &opts)
+		assert.NilError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Assert(t, strings.Contains(output, "sec"), "Should contain sec line")
+		assert.Assert(t, strings.Contains(output, "[ultimate]"), "Should contain [ultimate]")
+		assert.Assert(t, strings.Contains(output, "OSTree Key <ostree@hydroware.local>"), "Should contain UID")
+	})
+
+	t.Run("ColonFormat", func(t *testing.T) {
+		opts = Opts{WithColons: true}
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{
+				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+					types.KeySpecEccNistP256, map[string]string{"PGPName": "OSTree Key", "PGPEmail": "ostree@hydroware.local"}),
+			}, nil
+		}
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := ListSecretKeys(mockClient, &opts)
+		assert.NilError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Assert(t, strings.Contains(output, "sec:u:"), "Should contain sec: line")
+		assert.Assert(t, strings.Contains(output, "fpr:"), "Should contain fpr: line")
+		assert.Assert(t, strings.Contains(output, "uid:u:"), "Should contain uid: line")
+	})
+
+	t.Run("FallbackUID", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{
+				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+					types.KeySpecEccNistP256, map[string]string{}),
+			}, nil
+		}
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := ListSecretKeys(mockClient, &opts)
+		assert.NilError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Assert(t, strings.Contains(output, "AWS KMS Key <arn:aws:kms:us-east-1:123456789012:key/key1>"), "Should contain fallback UID")
+	})
+
+	t.Run("EmptyList", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return nil, nil
+		}
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := ListSecretKeys(mockClient, &opts)
+		assert.NilError(t, err)
+
+		w.Close()
+		os.Stdout = oldStdout
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		output := buf.String()
+
+		assert.Equal(t, output, "", "Should produce no output for empty list")
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return nil, fmt.Errorf("access denied")
+		}
+
+		err := ListSecretKeys(mockClient, &opts)
+		assert.ErrorContains(t, err, "access denied")
+	})
+
+	t.Run("ConflictWithExport", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		os.Args = []string{"pgpkms"}
+		opts.ListSecretKeys = true
+		opts.Export = true
+
+		err := Execute(mockClient)
+		assert.ErrorContains(t, err, "conflicting commands")
+	})
 }

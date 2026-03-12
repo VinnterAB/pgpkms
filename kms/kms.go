@@ -3,7 +3,6 @@ package kms
 import (
 	"context"
 	"crypto"
-	"crypto/x509"
 	"fmt"
 	"io"
 
@@ -15,6 +14,7 @@ import (
 // Client defines the interface for KMS operations
 type Client interface {
 	GetKey(keyId string) (*Key, error)
+	ListKeys() ([]*PublicKey, error)
 }
 
 // AWSKmsClient implements Client using AWS KMS
@@ -67,6 +67,55 @@ func (c *AWSKmsClient) GetKey(keyId string) (*Key, error) {
 	}, nil
 }
 
+// ListKeys lists all KMS signing keys with their tags
+func (c *AWSKmsClient) ListKeys() ([]*PublicKey, error) {
+	ctx := context.Background()
+	var result []*PublicKey
+
+	paginator := kms.NewListKeysPaginator(c.client, &kms.ListKeysInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list KMS keys: %w", err)
+		}
+
+		for _, keyEntry := range page.Keys {
+			keyId := *keyEntry.KeyId
+
+			desc, err := c.client.DescribeKey(ctx, &kms.DescribeKeyInput{KeyId: &keyId})
+			if err != nil {
+				continue
+			}
+
+			meta := desc.KeyMetadata
+			if !meta.Enabled || meta.KeyUsage != types.KeyUsageTypeSignVerify || meta.KeySpec == types.KeySpecSymmetricDefault {
+				continue
+			}
+
+			pubkey, err := c.client.GetPublicKey(ctx, &kms.GetPublicKeyInput{KeyId: &keyId})
+			if err != nil {
+				continue
+			}
+
+			tags := make(map[string]string)
+			tagsOutput, err := c.client.ListResourceTags(ctx, &kms.ListResourceTagsInput{KeyId: &keyId})
+			if err == nil {
+				for _, tag := range tagsOutput.Tags {
+					tags[*tag.TagKey] = *tag.TagValue
+				}
+			}
+
+			result = append(result, &PublicKey{
+				Description: desc,
+				Key:         pubkey,
+				Tags:        tags,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // KMSSigner implements crypto.Signer for AWS KMS keys
 type KMSSigner struct {
 	keyId     string
@@ -76,10 +125,9 @@ type KMSSigner struct {
 
 // Public returns the public key
 func (s *KMSSigner) Public() crypto.PublicKey {
-	// Parse the public key from the KMS key data
-	pubKeyAny, err := x509.ParsePKIXPublicKey(s.publicKey.Key.PublicKey)
+	pubKeyAny, err := s.publicKey.CryptoPublicKey()
 	if err != nil {
-		panic(fmt.Sprintf("failed to parse public key: %v", err))
+		panic(err)
 	}
 	return pubKeyAny
 }

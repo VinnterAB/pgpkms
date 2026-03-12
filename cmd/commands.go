@@ -43,6 +43,13 @@ func Execute(client kms.Client) error {
 		return nil
 	}
 
+	if opts.ListSecretKeys {
+		if opts.Export || opts.Sign || opts.ClearSign || opts.DetachedSign {
+			return errors.New("conflicting commands")
+		}
+		return ListSecretKeys(client, &opts)
+	}
+
 	if opts.ArmorAlias {
 		opts.Armor = true
 	}
