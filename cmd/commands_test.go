@@ -105,6 +105,10 @@ func (m *MockKmsClient) ListKeys() ([]*kmslib.PublicKey, error) {
 	return nil, nil
 }
 
+func inactiveStatusWriter() *StatusWriter {
+	return NewStatusWriter(nil, false)
+}
+
 func TestExportCommand(t *testing.T) {
 	// Reset opts before each test
 	defer func() { opts = Opts{} }()
@@ -127,7 +131,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportName = &name
 		opts.ExportEmail = &email
 
-		err := ExportKey(mockClient, &opts, []string{})
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -165,7 +169,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportEmail = &email
 		opts.Armor = true
 
-		err := ExportKey(mockClient, &opts, []string{})
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -203,7 +207,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportEmail = &email
 		opts.ArmorAlias = true
 
-		err := ExportKey(mockClient, &opts, []string{})
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -230,7 +234,7 @@ func TestExportCommand(t *testing.T) {
 		opts.Export = true
 		opts.User = keyId
 
-		err := ExportKey(mockClient, &opts, []string{})
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
 		assert.Error(t, err, "at least one of --export-name or --export-email must be provided")
 	})
 
@@ -244,7 +248,7 @@ func TestExportCommand(t *testing.T) {
 		opts.User = keyId
 		opts.ExportName = &name
 
-		err := ExportKey(mockClient, &opts, []string{})
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
 		assert.ErrorContains(t, err, "KMS key not found")
 	})
 }
@@ -269,10 +273,12 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, false, false, crypto.SHA256)
+		result, err := signData(mockClient, keyId, testData, false, false, crypto.SHA256)
 		assert.NilError(t, err)
+		assert.Assert(t, result.Fingerprint != "", "Should have fingerprint")
+		assert.Assert(t, result.PubkeyAlgo > 0, "Should have pubkey algo")
 
-		err = writeOutput(os.Stdout, signedData)
+		err = writeOutput(os.Stdout, result.Data)
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -306,10 +312,10 @@ func TestSignCommand(t *testing.T) {
 		// Test data
 		testData := []byte("Hello, World!")
 
-		signedData, err := signData(mockClient, keyId, testData, true, true, crypto.SHA256)
+		result, err := signData(mockClient, keyId, testData, true, true, crypto.SHA256)
 		assert.NilError(t, err)
 
-		err = writeOutput(os.Stdout, signedData)
+		err = writeOutput(os.Stdout, result.Data)
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -504,7 +510,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -544,7 +550,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -587,7 +593,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -631,7 +637,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		// Check that custom output file was created
@@ -997,7 +1003,7 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			opts.Output = &outputFile
 			opts.DigestAlgo = digestTest.algo
 
-			err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 			assert.NilError(t, err)
 
 			// Check that output file was created
@@ -1043,7 +1049,7 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			opts.Output = &outputFile
 			opts.DigestAlgo = digestTest.algo
 
-			err = Sign(mockClient, &opts, []string{tmpFile.Name()})
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
 			assert.NilError(t, err)
 
 			// Check that output file was created
@@ -1108,7 +1114,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts)
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1136,7 +1142,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts)
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1164,7 +1170,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts)
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1187,7 +1193,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts)
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1206,7 +1212,7 @@ func TestListSecretKeys(t *testing.T) {
 			return nil, fmt.Errorf("access denied")
 		}
 
-		err := ListSecretKeys(mockClient, &opts)
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
 		assert.ErrorContains(t, err, "access denied")
 	})
 

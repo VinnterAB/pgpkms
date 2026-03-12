@@ -7,7 +7,7 @@ import (
 	"github.com/vinnterab/pgpkms/pgp"
 )
 
-func ExportKey(client kms.Client, opts *Opts, args []string) error {
+func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter) error {
 	if opts.ArmorAlias {
 		opts.Armor = true
 	}
@@ -32,6 +32,13 @@ func ExportKey(client kms.Client, opts *Opts, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	info, err := pgp.GetKeyInfo(key.PublicKey)
+	if err != nil {
+		return err
+	}
+	fingerprint := fmt.Sprintf("%X", info.Fingerprint)
+	sw.Emit("KEY_CONSIDERED", fingerprint, "0")
 
 	bytes, err := pgp.Export(key.PublicKey, key.PrivateKey, opts.Armor, name, comment, email)
 	if err != nil {

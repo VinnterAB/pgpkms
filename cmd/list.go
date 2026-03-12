@@ -11,7 +11,7 @@ import (
 )
 
 // ListSecretKeys lists all KMS signing keys in GPG-compatible format
-func ListSecretKeys(client kms.Client, opts *Opts) error {
+func ListSecretKeys(client kms.Client, opts *Opts, sw *StatusWriter) error {
 	keys, err := client.ListKeys()
 	if err != nil {
 		return err
