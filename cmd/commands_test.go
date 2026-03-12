@@ -109,6 +109,10 @@ func inactiveStatusWriter() *StatusWriter {
 	return NewStatusWriter(nil, false)
 }
 
+func inactiveLoggerWriter() *LoggerWriter {
+	return NewLoggerWriter(nil)
+}
+
 func TestExportCommand(t *testing.T) {
 	// Reset opts before each test
 	defer func() { opts = Opts{} }()
@@ -131,7 +135,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportName = &name
 		opts.ExportEmail = &email
 
-		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -169,7 +173,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportEmail = &email
 		opts.Armor = true
 
-		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -207,7 +211,7 @@ func TestExportCommand(t *testing.T) {
 		opts.ExportEmail = &email
 		opts.ArmorAlias = true
 
-		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Restore stdout and read output
@@ -234,7 +238,7 @@ func TestExportCommand(t *testing.T) {
 		opts.Export = true
 		opts.User = keyId
 
-		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.Error(t, err, "at least one of --export-name or --export-email must be provided")
 	})
 
@@ -248,7 +252,7 @@ func TestExportCommand(t *testing.T) {
 		opts.User = keyId
 		opts.ExportName = &name
 
-		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter())
+		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.ErrorContains(t, err, "KMS key not found")
 	})
 }
@@ -510,7 +514,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -550,7 +554,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -593,7 +597,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Check that output file was created
@@ -637,7 +641,7 @@ func TestSign(t *testing.T) {
 		opts.User = keyId
 		opts.Output = &outputFile
 
-		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		// Check that custom output file was created
@@ -1003,7 +1007,7 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			opts.Output = &outputFile
 			opts.DigestAlgo = digestTest.algo
 
-			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 			assert.NilError(t, err)
 
 			// Check that output file was created
@@ -1049,7 +1053,7 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			opts.Output = &outputFile
 			opts.DigestAlgo = digestTest.algo
 
-			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+			err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 			assert.NilError(t, err)
 
 			// Check that output file was created
@@ -1114,7 +1118,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1142,7 +1146,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1170,7 +1174,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1193,7 +1197,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1212,7 +1216,7 @@ func TestListSecretKeys(t *testing.T) {
 			return nil, fmt.Errorf("access denied")
 		}
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter())
+		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.ErrorContains(t, err, "access denied")
 	})
 

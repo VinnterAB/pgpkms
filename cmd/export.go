@@ -7,7 +7,7 @@ import (
 	"github.com/vinnterab/pgpkms/pgp"
 )
 
-func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter) error {
+func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *LoggerWriter) error {
 	if opts.ArmorAlias {
 		opts.Armor = true
 	}
@@ -22,6 +22,8 @@ func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter) e
 	if opts.ExportEmail != nil {
 		email = *opts.ExportEmail
 	}
+
+	lw.Log("exporting key %s", opts.User)
 
 	// Check that we have at least name or email
 	if name == "" && email == "" {

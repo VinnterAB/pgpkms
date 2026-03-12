@@ -28,7 +28,7 @@ func parseDigestAlgo(algo string) (crypto.Hash, error) {
 	}
 }
 
-func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter) error {
+func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *LoggerWriter) error {
 	if opts.ClearSignAlias {
 		opts.ClearSign = true
 	}
@@ -50,10 +50,12 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter) error 
 	}
 
 	// Sign the data
+	lw.Log("signing data for key %s", opts.User)
 	result, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor, digestHash)
 	if err != nil {
 		return err
 	}
+	lw.Log("signed %d bytes using %s", len(result.Data), result.Fingerprint)
 
 	// Emit status lines
 	hashAlgo := gpgHashAlgoNumber(digestHash)

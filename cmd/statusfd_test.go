@@ -157,7 +157,7 @@ func TestSignWithStatusFd(t *testing.T) {
 	opts.User = keyId
 	opts.Output = &outputFile
 
-	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw)
+	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
 	statusW.Close()
@@ -196,7 +196,7 @@ func TestSignWithoutStatusFd(t *testing.T) {
 	opts.User = keyId
 	opts.Output = &outputFile
 
-	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter())
+	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 	assert.NilError(t, err)
 
 	_, err = os.Stat(outputFile)
@@ -233,7 +233,7 @@ func TestSigCreatedFormatDetached(t *testing.T) {
 	opts.User = keyId
 	opts.Output = &outputFile
 
-	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw)
+	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
 	statusW.Close()
@@ -285,7 +285,7 @@ func TestSigCreatedFormatClearSign(t *testing.T) {
 	opts.User = keyId
 	opts.Output = &outputFile
 
-	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw)
+	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
 	statusW.Close()

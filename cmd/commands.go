@@ -46,11 +46,14 @@ func Execute(client kms.Client) error {
 	sw := NewStatusWriter(opts.StatusFd, opts.ExitOnStatusWriteError)
 	defer sw.Close()
 
+	lw := NewLoggerWriter(opts.LoggerFd)
+	defer lw.Close()
+
 	if opts.ListSecretKeys {
 		if opts.Export || opts.Sign || opts.ClearSign || opts.DetachedSign {
 			return errors.New("conflicting commands")
 		}
-		return ListSecretKeys(client, &opts, sw)
+		return ListSecretKeys(client, &opts, sw, lw)
 	}
 
 	if opts.ArmorAlias {
@@ -79,11 +82,11 @@ func Execute(client kms.Client) error {
 	}
 
 	if opts.Export {
-		return ExportKey(client, &opts, args, sw)
+		return ExportKey(client, &opts, args, sw, lw)
 	}
 
 	if opts.Sign || opts.ClearSign {
-		return Sign(client, &opts, args, sw)
+		return Sign(client, &opts, args, sw, lw)
 	}
 
 	// No command provided, show usage
