@@ -35,11 +35,11 @@ func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter, l
 		lw.Log("key tag: %s=%s", k, v)
 	}
 
-	if name == "" && key.PublicKey.Tags["PGPName"] != "" {
-		name = key.PublicKey.Tags["PGPName"]
+	if name == "" && key.PublicKey.Tags[pgpNameTag] != "" {
+		name = key.PublicKey.Tags[pgpNameTag]
 	}
-	if email == "" && key.PublicKey.Tags["PGPEmail"] != "" {
-		email = key.PublicKey.Tags["PGPEmail"]
+	if email == "" && key.PublicKey.Tags[pgpEmailTag] != "" {
+		email = key.PublicKey.Tags[pgpEmailTag]
 	}
 
 	// Check that we have at least name or email

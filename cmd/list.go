@@ -59,8 +59,8 @@ func matchesKey(filter, uid, fingerprint, keyIdHex string) bool {
 }
 
 func formatUID(key *kms.PublicKey) string {
-	name := key.Tags["PGPName"]
-	email := key.Tags["PGPEmail"]
+	name := key.Tags[pgpNameTag]
+	email := key.Tags[pgpEmailTag]
 
 	if name == "" && email == "" {
 		return fmt.Sprintf("AWS KMS Key <%s>", *key.Description.KeyMetadata.Arn)
@@ -77,7 +77,7 @@ func printHumanFormat(key *kms.PublicKey, info *pgp.KeyInfo, uid, fingerprint st
 	algoName := algoName(key.Key.KeySpec)
 	dateStr := info.CreationTime.Format("2006-01-02")
 
-	fmt.Printf("sec   %s%d %s [SC]\n", algoName, info.BitLength, dateStr)
+	fmt.Printf("sec   %s %s [SC]\n", algoName, dateStr)
 	fmt.Printf("      %s\n", fingerprint)
 	fmt.Printf("uid           [ultimate] %s\n", uid)
 }
@@ -111,14 +111,18 @@ func pgpAlgoNumber(keySpec types.KeySpec) int {
 
 func algoName(keySpec types.KeySpec) string {
 	switch keySpec {
-	case types.KeySpecRsa2048, types.KeySpecRsa3072, types.KeySpecRsa4096:
-		return "rsa"
+	case types.KeySpecRsa2048:
+		return "rsa2048"
+	case types.KeySpecRsa3072:
+		return "rsa3072"
+	case types.KeySpecRsa4096:
+		return "rsa4096"
 	case types.KeySpecEccNistP256:
-		return "nistp256/"
+		return "nistp256"
 	case types.KeySpecEccNistP384:
-		return "nistp384/"
+		return "nistp384"
 	case types.KeySpecEccNistP521:
-		return "nistp521/"
+		return "nistp521"
 	default:
 		return strings.ToLower(string(keySpec))
 	}

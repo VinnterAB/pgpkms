@@ -317,8 +317,8 @@ func TestExportCommand(t *testing.T) {
 	t.Run("Export uses name and email from KMS tags when opts are empty", func(t *testing.T) {
 		opts = Opts{}
 		mockClient := NewMockKmsClient().WithTags(map[string]string{
-			"PGPName":  "Tagged User",
-			"PGPEmail": "tagged@example.com",
+			pgpNameTag:  "Tagged User",
+			pgpEmailTag: "tagged@example.com",
 		})
 
 		keyId := "test-key-id"
@@ -338,8 +338,8 @@ func TestExportCommand(t *testing.T) {
 	t.Run("Export opts override name and email from KMS tags", func(t *testing.T) {
 		opts = Opts{}
 		mockClient := NewMockKmsClient().WithTags(map[string]string{
-			"PGPName":  "Tagged User",
-			"PGPEmail": "tagged@example.com",
+			pgpNameTag:  "Tagged User",
+			pgpEmailTag: "tagged@example.com",
 		})
 
 		keyId := "test-key-id"
@@ -1294,7 +1294,7 @@ func TestResolveKeyId(t *testing.T) {
 
 		// Create key once so it's stable across calls
 		key := createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-			types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"})
+			types.KeySpecEccNistP256, map[string]string{pgpNameTag: "Test", pgpEmailTag: "test@test.com"})
 
 		info, err := pgp.GetKeyInfo(key)
 		assert.NilError(t, err)
@@ -1313,7 +1313,7 @@ func TestResolveKeyId(t *testing.T) {
 		mockClient := NewMockKmsClient()
 
 		key := createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-			types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"})
+			types.KeySpecEccNistP256, map[string]string{pgpNameTag: "Test", pgpEmailTag: "test@test.com"})
 
 		info, err := pgp.GetKeyInfo(key)
 		assert.NilError(t, err)
@@ -1333,7 +1333,7 @@ func TestResolveKeyId(t *testing.T) {
 		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
 			return []*kmslib.PublicKey{
 				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-					types.KeySpecEccNistP256, map[string]string{"PGPName": "Test User", "PGPEmail": "test@test.com"}),
+					types.KeySpecEccNistP256, map[string]string{pgpNameTag: "Test User", pgpEmailTag: "test@test.com"}),
 			}, nil
 		}
 
@@ -1347,7 +1347,7 @@ func TestResolveKeyId(t *testing.T) {
 		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
 			return []*kmslib.PublicKey{
 				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-					types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"}),
+					types.KeySpecEccNistP256, map[string]string{pgpNameTag: "Test", pgpEmailTag: "test@test.com"}),
 			}, nil
 		}
 
@@ -1417,7 +1417,7 @@ func TestListSecretKeys(t *testing.T) {
 		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
 			return []*kmslib.PublicKey{
 				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-					types.KeySpecEccNistP256, map[string]string{"PGPName": "OSTree Key", "PGPEmail": "ostree@hydroware.local"}),
+					types.KeySpecEccNistP256, map[string]string{pgpNameTag: "OSTree Key", pgpEmailTag: "ostree@hydroware.local"}),
 			}, nil
 		}
 
@@ -1445,7 +1445,7 @@ func TestListSecretKeys(t *testing.T) {
 		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
 			return []*kmslib.PublicKey{
 				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
-					types.KeySpecEccNistP256, map[string]string{"PGPName": "OSTree Key", "PGPEmail": "ostree@hydroware.local"}),
+					types.KeySpecEccNistP256, map[string]string{pgpNameTag: "OSTree Key", pgpEmailTag: "ostree@hydroware.local"}),
 			}, nil
 		}
 
