@@ -478,60 +478,6 @@ func TestExecuteFunction(t *testing.T) {
 	})
 }
 
-func TestValidateCharset(t *testing.T) {
-	t.Run("Valid charsets are accepted", func(t *testing.T) {
-		valid := []string{"utf-8", "iso-8859-1", "iso-8859-2", "iso-8859-15", "koi8-r", "UTF-8", "ISO-8859-1"}
-		for _, charset := range valid {
-			err := validateCharset(charset)
-			assert.NilError(t, err, "charset %q should be valid", charset)
-		}
-	})
-
-	t.Run("Invalid charset returns error", func(t *testing.T) {
-		err := validateCharset("invalid")
-		assert.ErrorContains(t, err, "invalid charset")
-	})
-}
-
-func TestCharsetFlag(t *testing.T) {
-	originalArgs := os.Args
-	defer func() {
-		os.Args = originalArgs
-		opts = Opts{}
-	}()
-
-	t.Run("Valid charset accepted in execute", func(t *testing.T) {
-		opts = Opts{}
-		mockClient := NewMockKmsClient()
-		charset := "utf-8"
-		opts.Charset = &charset
-
-		// Capture stdout
-		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		os.Args = []string{"pgpkms"}
-		err := Execute(mockClient)
-		assert.NilError(t, err)
-
-		w.Close()
-		os.Stdout = oldStdout
-		io.Copy(&bytes.Buffer{}, r)
-	})
-
-	t.Run("Invalid charset rejected in execute", func(t *testing.T) {
-		opts = Opts{}
-		mockClient := NewMockKmsClient()
-		charset := "invalid"
-		opts.Charset = &charset
-
-		os.Args = []string{"pgpkms"}
-		err := Execute(mockClient)
-		assert.ErrorContains(t, err, "invalid charset")
-	})
-}
-
 func TestSign(t *testing.T) {
 	// Reset opts before each test
 	defer func() { opts = Opts{} }()
@@ -1172,7 +1118,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
+		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1200,7 +1146,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
+		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1228,7 +1174,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
+		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1251,7 +1197,7 @@ func TestListSecretKeys(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
+		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
 		w.Close()
@@ -1270,7 +1216,7 @@ func TestListSecretKeys(t *testing.T) {
 			return nil, fmt.Errorf("access denied")
 		}
 
-		err := ListSecretKeys(mockClient, &opts, inactiveStatusWriter(), inactiveLoggerWriter())
+		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.ErrorContains(t, err, "access denied")
 	})
 

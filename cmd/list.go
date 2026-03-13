@@ -10,11 +10,17 @@ import (
 	"github.com/vinnterab/pgpkms/pgp"
 )
 
-// ListSecretKeys lists all KMS signing keys in GPG-compatible format
-func ListSecretKeys(client kms.Client, opts *Opts, sw *StatusWriter, lw *LoggerWriter) error {
+// ListSecretKeys lists KMS signing keys in GPG-compatible format.
+// If args contains a search term, only keys matching by UID, fingerprint, or key ID are shown.
+func ListSecretKeys(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *LoggerWriter) error {
 	keys, err := client.ListKeys()
 	if err != nil {
 		return err
+	}
+
+	var filter string
+	if len(args) > 0 {
+		filter = args[0]
 	}
 
 	for _, key := range keys {
@@ -28,6 +34,10 @@ func ListSecretKeys(client kms.Client, opts *Opts, sw *StatusWriter, lw *LoggerW
 		keyIdHex := fmt.Sprintf("%X", info.KeyId)
 		creationUnix := info.CreationTime.Unix()
 
+		if filter != "" && !matchesKey(filter, uid, fingerprint, keyIdHex) {
+			continue
+		}
+
 		if opts.WithColons {
 			printColonFormat(key, info, uid, fingerprint, keyIdHex, creationUnix)
 		} else {
@@ -36,6 +46,16 @@ func ListSecretKeys(client kms.Client, opts *Opts, sw *StatusWriter, lw *LoggerW
 	}
 
 	return nil
+}
+
+func matchesKey(filter, uid, fingerprint, keyIdHex string) bool {
+	if strings.Contains(uid, filter) {
+		return true
+	}
+	if strings.EqualFold(fingerprint, filter) || strings.EqualFold(keyIdHex, filter) {
+		return true
+	}
+	return false
 }
 
 func formatUID(key *kms.PublicKey) string {

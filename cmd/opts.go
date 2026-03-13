@@ -22,4 +22,10 @@ type Opts struct {
 	ExitOnStatusWriteError bool    `long:"exit-on-status-write-error" description:"Exit if writing to status-fd fails"`
 	LoggerFd               *int    `long:"logger-fd" description:"Write log info to this file descriptor"`
 	Charset                *string `long:"charset" description:"Character set for display (accepted for GPG compatibility)"`
+	Batch                  bool    `long:"batch" description:"Batch mode (accepted for GPG compatibility)"`
+	NoTTY                  bool    `long:"no-tty" description:"No TTY (accepted for GPG compatibility)"`
+	NoGreeting             bool    `long:"no-greeting" description:"No greeting (accepted for GPG compatibility)"`
+	NoSkComments           bool    `long:"no-sk-comments" description:"No secret key comments (accepted for GPG compatibility)"`
+	HomeDir                *string `long:"homedir" description:"GPG home directory (accepted for GPG compatibility)"`
+	LcCtype                *string `long:"lc-ctype" description:"Locale ctype (accepted for GPG compatibility)"`
 }

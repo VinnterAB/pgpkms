@@ -20,21 +20,6 @@ func replaceEqualSigns(helptext string) string {
 	return strings.ReplaceAll(helptext, "=", " ")
 }
 
-var validCharsets = map[string]bool{
-	"utf-8":       true,
-	"iso-8859-1":  true,
-	"iso-8859-2":  true,
-	"iso-8859-15": true,
-	"koi8-r":      true,
-}
-
-func validateCharset(charset string) error {
-	if !validCharsets[strings.ToLower(charset)] {
-		return fmt.Errorf("invalid charset: %s", charset)
-	}
-	return nil
-}
-
 func Execute(client kms.Client) error {
 	parser := flags.NewParser(&opts, flags.Default&^flags.PrintErrors)
 
@@ -58,12 +43,6 @@ func Execute(client kms.Client) error {
 		return nil
 	}
 
-	if opts.Charset != nil {
-		if err := validateCharset(*opts.Charset); err != nil {
-			return err
-		}
-	}
-
 	sw := NewStatusWriter(opts.StatusFd, opts.ExitOnStatusWriteError)
 	defer sw.Close()
 
@@ -74,7 +53,7 @@ func Execute(client kms.Client) error {
 		if opts.Export || opts.Sign || opts.ClearSign || opts.DetachedSign {
 			return errors.New("conflicting commands")
 		}
-		return ListSecretKeys(client, &opts, sw, lw)
+		return ListSecretKeys(client, &opts, args, sw, lw)
 	}
 
 	if opts.ArmorAlias {
@@ -100,6 +79,15 @@ func Execute(client kms.Client) error {
 	// these require a key
 	if (opts.Export || opts.Sign || opts.ClearSign) && opts.User == "" {
 		return errors.New("specify the key id with -u/--local-user ")
+	}
+
+	// Resolve friendly key identifiers to KMS ARN
+	if opts.User != "" {
+		resolved, err := ResolveKeyId(client, opts.User)
+		if err != nil {
+			return err
+		}
+		opts.User = resolved
 	}
 
 	if opts.Export {
