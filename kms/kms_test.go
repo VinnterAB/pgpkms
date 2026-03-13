@@ -1,6 +1,7 @@
 package kms
 
 import (
+	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -16,6 +17,49 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"gotest.tools/v3/assert"
 )
+
+type mockKMSAPI struct {
+	describeKeyFunc      func(ctx context.Context, params *kms.DescribeKeyInput, optFns ...func(*kms.Options)) (*kms.DescribeKeyOutput, error)
+	getPublicKeyFunc     func(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error)
+	listKeysFunc         func(ctx context.Context, params *kms.ListKeysInput, optFns ...func(*kms.Options)) (*kms.ListKeysOutput, error)
+	listResourceTagsFunc func(ctx context.Context, params *kms.ListResourceTagsInput, optFns ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error)
+	signFunc             func(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error)
+}
+
+func (m *mockKMSAPI) DescribeKey(ctx context.Context, params *kms.DescribeKeyInput, optFns ...func(*kms.Options)) (*kms.DescribeKeyOutput, error) {
+	if m.describeKeyFunc == nil {
+		return nil, fmt.Errorf("unexpected DescribeKey call")
+	}
+	return m.describeKeyFunc(ctx, params, optFns...)
+}
+
+func (m *mockKMSAPI) GetPublicKey(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+	if m.getPublicKeyFunc == nil {
+		return nil, fmt.Errorf("unexpected GetPublicKey call")
+	}
+	return m.getPublicKeyFunc(ctx, params, optFns...)
+}
+
+func (m *mockKMSAPI) ListKeys(ctx context.Context, params *kms.ListKeysInput, optFns ...func(*kms.Options)) (*kms.ListKeysOutput, error) {
+	if m.listKeysFunc == nil {
+		return nil, fmt.Errorf("unexpected ListKeys call")
+	}
+	return m.listKeysFunc(ctx, params, optFns...)
+}
+
+func (m *mockKMSAPI) ListResourceTags(ctx context.Context, params *kms.ListResourceTagsInput, optFns ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error) {
+	if m.listResourceTagsFunc == nil {
+		return nil, fmt.Errorf("unexpected ListResourceTags call")
+	}
+	return m.listResourceTagsFunc(ctx, params, optFns...)
+}
+
+func (m *mockKMSAPI) Sign(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error) {
+	if m.signFunc == nil {
+		return nil, fmt.Errorf("unexpected Sign call")
+	}
+	return m.signFunc(ctx, params, optFns...)
+}
 
 // MockClient implements the Client interface for testing
 type MockClient struct {
@@ -142,6 +186,102 @@ func TestMockClient_GetKey_Error(t *testing.T) {
 
 	_, err := mockClient.GetKey(testKeyId)
 	assert.ErrorContains(t, err, "mock error")
+}
+
+func TestAWSKmsClient_GetKey_FillsTags(t *testing.T) {
+	keyID := "test-key-id"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/" + keyID
+	creationDate := time.Now()
+	_, pubKeyBytes, err := createTestECDSAKey()
+	assert.NilError(t, err)
+
+	client := &AWSKmsClient{
+		client: &mockKMSAPI{
+			describeKeyFunc: func(ctx context.Context, params *kms.DescribeKeyInput, optFns ...func(*kms.Options)) (*kms.DescribeKeyOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.DescribeKeyOutput{
+					KeyMetadata: &types.KeyMetadata{
+						KeyId:        &keyID,
+						Arn:          &keyArn,
+						CreationDate: &creationDate,
+						Enabled:      true,
+						KeyUsage:     types.KeyUsageTypeSignVerify,
+						KeySpec:      types.KeySpecEccNistP256,
+					},
+				}, nil
+			},
+			getPublicKeyFunc: func(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.GetPublicKeyOutput{
+					KeyId:     &keyID,
+					PublicKey: pubKeyBytes,
+					KeySpec:   types.KeySpecEccNistP256,
+				}, nil
+			},
+			listResourceTagsFunc: func(ctx context.Context, params *kms.ListResourceTagsInput, optFns ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.ListResourceTagsOutput{
+					Tags: []types.Tag{{TagKey: aws.String("env"), TagValue: aws.String("test")}},
+				}, nil
+			},
+		},
+	}
+
+	key, err := client.GetKey(keyID)
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, key.PublicKey.Tags, map[string]string{"env": "test"})
+}
+
+func TestAWSKmsClient_ListKeys_FillsTags(t *testing.T) {
+	keyID := "test-key-id"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/" + keyID
+	creationDate := time.Now()
+	_, pubKeyBytes, err := createTestECDSAKey()
+	assert.NilError(t, err)
+
+	client := &AWSKmsClient{
+		client: &mockKMSAPI{
+			listKeysFunc: func(ctx context.Context, params *kms.ListKeysInput, optFns ...func(*kms.Options)) (*kms.ListKeysOutput, error) {
+				return &kms.ListKeysOutput{
+					Keys: []types.KeyListEntry{{KeyId: &keyID}},
+				}, nil
+			},
+			describeKeyFunc: func(ctx context.Context, params *kms.DescribeKeyInput, optFns ...func(*kms.Options)) (*kms.DescribeKeyOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.DescribeKeyOutput{
+					KeyMetadata: &types.KeyMetadata{
+						KeyId:        &keyID,
+						Arn:          &keyArn,
+						CreationDate: &creationDate,
+						Enabled:      true,
+						KeyUsage:     types.KeyUsageTypeSignVerify,
+						KeySpec:      types.KeySpecEccNistP256,
+					},
+				}, nil
+			},
+			getPublicKeyFunc: func(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.GetPublicKeyOutput{
+					KeyId:     &keyID,
+					PublicKey: pubKeyBytes,
+					KeySpec:   types.KeySpecEccNistP256,
+				}, nil
+			},
+			listResourceTagsFunc: func(ctx context.Context, params *kms.ListResourceTagsInput, optFns ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error) {
+				assert.Equal(t, *params.KeyId, keyID)
+				return &kms.ListResourceTagsOutput{
+					Tags: []types.Tag{{TagKey: aws.String("team"), TagValue: aws.String("infra")}},
+				}, nil
+			},
+		},
+	}
+
+	keys, err := client.ListKeys()
+
+	assert.NilError(t, err)
+	assert.Equal(t, len(keys), 1)
+	assert.DeepEqual(t, keys[0].Tags, map[string]string{"team": "infra"})
 }
 
 func TestKMSSigner_Public(t *testing.T) {

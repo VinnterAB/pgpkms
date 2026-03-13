@@ -17,6 +17,7 @@ type LoggerWriter struct {
 func NewLoggerWriter(fdNum *int) *LoggerWriter {
 	lw := &LoggerWriter{}
 	if fdNum == nil {
+		lw.active = false
 		return lw
 	}
 	lw.file = os.NewFile(uintptr(*fdNum), "logger-fd")

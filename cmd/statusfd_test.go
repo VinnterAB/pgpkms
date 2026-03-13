@@ -17,20 +17,34 @@ func TestStatusWriterEmit(t *testing.T) {
 	assert.NilError(t, err)
 	defer func() { _ = r.Close() }()
 
+	stdoutR, stdoutW, err := os.Pipe()
+	assert.NilError(t, err)
+	defer func() { _ = stdoutR.Close() }()
+
+	oldStdout := os.Stdout
+	os.Stdout = stdoutW
+	defer func() { os.Stdout = oldStdout }()
+
 	fd := int(w.Fd())
 	sw := NewStatusWriter(&fd, false)
 
 	sw.Emit("KEY_CONSIDERED", "ABCD1234", "0")
 	sw.Emit("BEGIN_SIGNING", "H8")
+	_ = stdoutW.Close()
 	_ = w.Close()
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
 	assert.NilError(t, err)
 
+	var stdoutBuf bytes.Buffer
+	_, err = io.Copy(&stdoutBuf, stdoutR)
+	assert.NilError(t, err)
+
 	output := buf.String()
 	assert.Assert(t, strings.Contains(output, "[GNUPG:] KEY_CONSIDERED ABCD1234 0\n"))
 	assert.Assert(t, strings.Contains(output, "[GNUPG:] BEGIN_SIGNING H8\n"))
+	assert.Equal(t, stdoutBuf.String(), "")
 }
 
 func TestStatusWriterEmitNoArgs(t *testing.T) {

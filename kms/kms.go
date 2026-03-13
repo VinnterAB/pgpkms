@@ -17,9 +17,31 @@ type Client interface {
 	ListKeys() ([]*PublicKey, error)
 }
 
+type kmsAPI interface {
+	DescribeKey(ctx context.Context, params *kms.DescribeKeyInput, optFns ...func(*kms.Options)) (*kms.DescribeKeyOutput, error)
+	GetPublicKey(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error)
+	ListKeys(ctx context.Context, params *kms.ListKeysInput, optFns ...func(*kms.Options)) (*kms.ListKeysOutput, error)
+	ListResourceTags(ctx context.Context, params *kms.ListResourceTagsInput, optFns ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error)
+	Sign(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error)
+}
+
 // AWSKmsClient implements Client using AWS KMS
 type AWSKmsClient struct {
-	client *kms.Client
+	client kmsAPI
+}
+
+func (c *AWSKmsClient) getKeyTags(ctx context.Context, keyId string) map[string]string {
+	tags := make(map[string]string)
+	tagsOutput, err := c.client.ListResourceTags(ctx, &kms.ListResourceTagsInput{KeyId: &keyId})
+	if err != nil {
+		return tags
+	}
+
+	for _, tag := range tagsOutput.Tags {
+		tags[*tag.TagKey] = *tag.TagValue
+	}
+
+	return tags
 }
 
 // NewAWSKmsClient creates a new AWS KMS client
@@ -52,7 +74,11 @@ func (c *AWSKmsClient) GetKey(keyId string) (*Key, error) {
 		return nil, fmt.Errorf("failed to get public key for KMS key %s: %w", keyId, err)
 	}
 
-	publicKey := &PublicKey{Description: keyDescription, Key: pubkey}
+	publicKey := &PublicKey{
+		Description: keyDescription,
+		Key:         pubkey,
+		Tags:        c.getKeyTags(ctx, keyId),
+	}
 
 	// Create KMS signer
 	signer := &KMSSigner{
@@ -97,18 +123,10 @@ func (c *AWSKmsClient) ListKeys() ([]*PublicKey, error) {
 				continue
 			}
 
-			tags := make(map[string]string)
-			tagsOutput, err := c.client.ListResourceTags(ctx, &kms.ListResourceTagsInput{KeyId: &keyId})
-			if err == nil {
-				for _, tag := range tagsOutput.Tags {
-					tags[*tag.TagKey] = *tag.TagValue
-				}
-			}
-
 			result = append(result, &PublicKey{
 				Description: desc,
 				Key:         pubkey,
-				Tags:        tags,
+				Tags:        c.getKeyTags(ctx, keyId),
 			})
 		}
 	}
@@ -119,7 +137,7 @@ func (c *AWSKmsClient) ListKeys() ([]*PublicKey, error) {
 // KMSSigner implements crypto.Signer for AWS KMS keys
 type KMSSigner struct {
 	keyId     string
-	client    *kms.Client
+	client    kmsAPI
 	publicKey *PublicKey
 }
 

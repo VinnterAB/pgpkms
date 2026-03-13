@@ -25,14 +25,26 @@ func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter, l
 
 	lw.Log("exporting key %s", opts.User)
 
-	// Check that we have at least name or email
-	if name == "" && email == "" {
-		return fmt.Errorf("at least one of --export-name or --export-email must be provided")
-	}
-
 	key, err := client.GetKey(opts.User)
 	if err != nil {
 		return err
+	}
+
+	// Log all Tags from Public Key
+	for k, v := range key.PublicKey.Tags {
+		lw.Log("key tag: %s=%s", k, v)
+	}
+
+	if name == "" && key.PublicKey.Tags["PGPName"] != "" {
+		name = key.PublicKey.Tags["PGPName"]
+	}
+	if email == "" && key.PublicKey.Tags["PGPEmail"] != "" {
+		email = key.PublicKey.Tags["PGPEmail"]
+	}
+
+	// Check that we have at least name or email
+	if name == "" && email == "" {
+		return fmt.Errorf("at least one of --export-name or --export-email must be provided")
 	}
 
 	info, err := pgp.GetKeyInfo(key.PublicKey)

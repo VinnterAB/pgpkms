@@ -15,20 +15,34 @@ func TestLoggerWriterLog(t *testing.T) {
 	assert.NilError(t, err)
 	defer func() { _ = r.Close() }()
 
+	stdoutR, stdoutW, err := os.Pipe()
+	assert.NilError(t, err)
+	defer func() { _ = stdoutR.Close() }()
+
+	oldStdout := os.Stdout
+	os.Stdout = stdoutW
+	defer func() { os.Stdout = oldStdout }()
+
 	fd := int(w.Fd())
 	lw := NewLoggerWriter(&fd)
 
 	lw.Log("hello %s", "world")
 	lw.Log("count %d", 42)
+	_ = stdoutW.Close()
 	_ = w.Close()
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
 	assert.NilError(t, err)
 
+	var stdoutBuf bytes.Buffer
+	_, err = io.Copy(&stdoutBuf, stdoutR)
+	assert.NilError(t, err)
+
 	output := buf.String()
 	assert.Assert(t, strings.Contains(output, "hello world\n"))
 	assert.Assert(t, strings.Contains(output, "count 42\n"))
+	assert.Equal(t, stdoutBuf.String(), "")
 }
 
 func TestLoggerWriterInactive(t *testing.T) {

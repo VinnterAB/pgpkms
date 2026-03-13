@@ -24,6 +24,7 @@ func NewStatusWriter(fdNum *int, exitOnError bool) *StatusWriter {
 		exitFunc:    os.Exit,
 	}
 	if fdNum == nil {
+		sw.active = false
 		return sw
 	}
 	sw.file = os.NewFile(uintptr(*fdNum), "status-fd")

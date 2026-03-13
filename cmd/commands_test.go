@@ -19,6 +19,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	kmslib "github.com/vinnterab/pgpkms/kms"
 	"github.com/vinnterab/pgpkms/pgp"
+
+	//nolint:staticcheck // SA1019: required to validate exported OpenPGP identities in tests
+	"golang.org/x/crypto/openpgp"
 	"gotest.tools/v3/assert"
 )
 
@@ -47,6 +50,7 @@ type MockKmsClient struct {
 	shouldError  bool
 	errorMsg     string
 	listKeysFunc func() ([]*kmslib.PublicKey, error)
+	tags         map[string]string
 }
 
 func NewMockKmsClient() *MockKmsClient {
@@ -56,6 +60,11 @@ func NewMockKmsClient() *MockKmsClient {
 func (m *MockKmsClient) WithError(msg string) *MockKmsClient {
 	m.shouldError = true
 	m.errorMsg = msg
+	return m
+}
+
+func (m *MockKmsClient) WithTags(tags map[string]string) *MockKmsClient {
+	m.tags = tags
 	return m
 }
 
@@ -88,6 +97,7 @@ func (m *MockKmsClient) GetKey(keyId string) (*kmslib.Key, error) {
 			PublicKey: pubKeyBytes,
 			KeySpec:   types.KeySpecEccNistP256,
 		},
+		Tags: m.tags,
 	}
 
 	return &kmslib.Key{
@@ -112,6 +122,53 @@ func inactiveStatusWriter() *StatusWriter {
 
 func inactiveLoggerWriter() *LoggerWriter {
 	return NewLoggerWriter(nil)
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	assert.NilError(t, err)
+	os.Stdout = w
+
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	fn()
+
+	err = w.Close()
+	assert.NilError(t, err)
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	assert.NilError(t, err)
+
+	return buf.String()
+}
+
+func readArmoredEntity(t *testing.T, armored string) *openpgp.Entity {
+	t.Helper()
+
+	entities, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armored))
+	assert.NilError(t, err)
+	assert.Equal(t, len(entities), 1)
+
+	return entities[0]
+}
+
+func assertEntityIdentity(t *testing.T, entity *openpgp.Entity, expectedName, expectedEmail string) {
+	t.Helper()
+
+	assert.Equal(t, len(entity.Identities), 1)
+	for _, identity := range entity.Identities {
+		assert.Equal(t, identity.UserId.Name, expectedName)
+		assert.Equal(t, identity.UserId.Email, expectedEmail)
+		return
+	}
+
+	t.Fatal("expected exactly one identity")
 }
 
 func TestExportCommand(t *testing.T) {
@@ -255,6 +312,52 @@ func TestExportCommand(t *testing.T) {
 
 		err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.ErrorContains(t, err, "KMS key not found")
+	})
+
+	t.Run("Export uses name and email from KMS tags when opts are empty", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient().WithTags(map[string]string{
+			"PGPName":  "Tagged User",
+			"PGPEmail": "tagged@example.com",
+		})
+
+		keyId := "test-key-id"
+		opts.Export = true
+		opts.User = keyId
+		opts.Armor = true
+
+		output := captureStdout(t, func() {
+			err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
+			assert.NilError(t, err)
+		})
+
+		entity := readArmoredEntity(t, output)
+		assertEntityIdentity(t, entity, "Tagged User", "tagged@example.com")
+	})
+
+	t.Run("Export opts override name and email from KMS tags", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient().WithTags(map[string]string{
+			"PGPName":  "Tagged User",
+			"PGPEmail": "tagged@example.com",
+		})
+
+		keyId := "test-key-id"
+		name := "Override User"
+		email := "override@example.com"
+		opts.Export = true
+		opts.User = keyId
+		opts.Armor = true
+		opts.ExportName = &name
+		opts.ExportEmail = &email
+
+		output := captureStdout(t, func() {
+			err := ExportKey(mockClient, &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
+			assert.NilError(t, err)
+		})
+
+		entity := readArmoredEntity(t, output)
+		assertEntityIdentity(t, entity, "Override User", "override@example.com")
 	})
 }
 
