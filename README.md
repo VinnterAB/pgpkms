@@ -70,7 +70,14 @@ pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-
 
 # Sign data from stdin to stdout
 echo "Hello, World!" | pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+
+# Sign data from an already-open file descriptor
+pgpkms --enable-special-filenames --sign \
+       -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
+       -&3
 ```
+
+When `--enable-special-filenames` is set, positional input filenames may use GPG-style special filename syntax. `-&N` reads input from the already-open file descriptor `N`.
 
 ### Clear Text Signing
 
@@ -86,28 +93,37 @@ echo "This is a test message" | pgpkms --clear-sign -u arn:aws:kms:us-east-1:123
 
 ## Command Line Options
 
-```
-Usage:
-  pgpkms [OPTIONS]
-
-Application Options:
-  -b, --detach-sign     Make a detched signature
-  -a, --armor           Use ASCII Armoured format for the output
-      --armour          Alias for --armor
-      --export          Export a public part of a KMS key in a PGP Key Block
-      --export-name     Name to use for the exported PGP key (used with --export)
-      --export-email    Email to use for the exported PGP key (used with --export)
-      --export-comment  Comment to use for the exported PGP key (used with --export)
-  -s, --sign            Sign a file using KMS key
-      --clear-sign      Create a clear text signature using KMS key
-      --clearsign       Alias for --clear-sign
-  -o, --output          Output file (default: input file + .asc)
-  -u, --local-user      The key ID to use
-      --digest-algo     Digest algorithm to use (sha1, sha256, sha384, sha512) (default: sha256)
-
-Help Options:
-  -h, --help            Show this help message
-```
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--sign` | `-s` | Sign a file using KMS key |
+| `--detach-sign` | `-b` | Make a detached signature |
+| `--detach` | | Alias for `--detach-sign` |
+| `--clear-sign` | | Create a clear text signature |
+| `--clearsign` | | Alias for `--clear-sign` |
+| `--export` | | Export KMS public key as PGP key block |
+| `--export-name` | | Name for the exported PGP key |
+| `--export-email` | | Email for the exported PGP key |
+| `--export-comment` | | Comment for the exported PGP key |
+| `--armor` | `-a` | Use ASCII armored format for output |
+| `--armour` | | Alias for `--armor` |
+| `--local-user` | `-u` | Key ID, ARN, alias, UID, fingerprint, or key ID hex |
+| `--output` | `-o` | Output file (default: input file + `.asc`) |
+| `--digest-algo` | | Hash algorithm: sha1, sha256, sha384, sha512 (default: sha256) |
+| `--list-secret-keys` | `-K` | List signing keys in GPG-compatible format |
+| `--with-colons` | | Print key listings delimited by colons |
+| `--version` | | Display version information (Formatted to be GPG compatible) |
+| `--status-fd` | | Write status info to a file descriptor |
+| `--logger-fd` | | Write log info to a file descriptor |
+| `--exit-on-status-write-error` | | Exit if writing to status-fd fails |
+| `--enable-progress-filter` | | Enable progress indicator reporting |
+| `--enable-special-filenames` | | Enable GPG special filenames such as `-&N` for positional input |
+| `--charset` | | *No-op.* Accepted for GPG compatibility |
+| `--batch` | | *No-op.* Accepted for GPG compatibility |
+| `--no-tty` | | *No-op.* Accepted for GPG compatibility |
+| `--no-greeting` | | *No-op.* Accepted for GPG compatibility |
+| `--no-sk-comments` | | *No-op.* Accepted for GPG compatibility |
+| `--homedir` | | *No-op.* Accepted for GPG compatibility |
+| `--lc-ctype` | | *No-op.* Accepted for GPG compatibility |
 
 ## Examples
 
@@ -151,6 +167,27 @@ pgpkms --sign $KMS_KEY_ARN release.tar.gz
 # Create detached signature
 pgpkms --sign $KMS_KEY_ARN release.tar.gz -o release.tar.gz.sig
 ```
+
+### OSTree Commit Signing
+
+`pgpkms` can replace `gpg` for signing OSTree commits, allowing you to use AWS KMS-backed keys instead of local GPG keyrings.
+
+**Setup:** Tag your KMS key with `PGPName` and `PGPEmail` tags. These tags are used to build the PGP UID when listing keys (`--list-secret-keys`) and when resolving keys by UID via `-u`. This lets OSTree (and other tools) look up keys the same way they would with GPG.
+
+```bash
+aws kms tag-resource --key-id <key-id> \
+  --tags TagKey=PGPName,TagValue="OSTree Signing Key" \
+         TagKey=PGPEmail,TagValue="ostree@example.com"
+```
+
+**Usage with OSTree:** Symlink or alias `pgpkms` as `gpg` in your build environment, then use OSTree's standard signing workflow:
+
+```bash
+ln -s /path/to/pgpkms /usr/local/bin/gpg
+ostree commit --sign-type=gpg --gpg-sign="OSTree Signing Key" ...
+```
+
+OSTree passes `--status-fd`, `--batch`, `--no-tty`, and other GPG flags that `pgpkms` accepts (see no-op flags above).
 
 ### Replacing gpg in toolchains
 

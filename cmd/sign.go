@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vinnterab/pgpkms/kms"
 	"github.com/vinnterab/pgpkms/pgp"
@@ -27,7 +29,7 @@ func parseDigestAlgo(algo string) (crypto.Hash, error) {
 	}
 }
 
-func Sign(client kms.Client, opts *Opts, args []string) error {
+func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *LoggerWriter) error {
 	if opts.ClearSignAlias {
 		opts.ClearSign = true
 	}
@@ -43,10 +45,23 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	}
 
 	// Determine input source
-	inputData, inputName, err := determineInputSource(args)
+	inputData, inputName, err := determineInputSource(args, opts.EnableSpecialFilenames)
 	if err != nil {
 		return err
 	}
+
+	// Sign the data
+	lw.Log("signing data for key %s", opts.User)
+	result, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor, digestHash)
+	if err != nil {
+		return err
+	}
+	lw.Log("signed %d bytes using %s", len(result.Data), result.Fingerprint)
+
+	// Emit status lines
+	hashAlgo := gpgHashAlgoNumber(digestHash)
+	sw.Emit("KEY_CONSIDERED", result.Fingerprint, "0")
+	sw.Emit("BEGIN_SIGNING", fmt.Sprintf("H%d", hashAlgo))
 
 	// Determine output writer and write
 	writer, outputFile, err := determineOutputWriter(args, opts, inputName)
@@ -60,16 +75,21 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 		}
 	}()
 
-	// Sign the data
-	signature, err := signData(client, opts.User, inputData, opts.ClearSign, opts.Armor, digestHash)
+	err = writeOutput(writer, result.Data)
 	if err != nil {
 		return err
 	}
 
-	err = writeOutput(writer, signature)
-	if err != nil {
-		return err
+	// Emit SIG_CREATED
+	sigType := "D"
+	sigClass := "00"
+	if opts.ClearSign {
+		sigType = "C"
+		sigClass = "01"
 	}
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+
+	sw.Emit("SIG_CREATED", sigType, fmt.Sprintf("%d", result.PubkeyAlgo), fmt.Sprintf("%d", hashAlgo), sigClass, timestamp, result.Fingerprint)
 
 	// Print status message if writing to file
 	if outputFile != "" {
@@ -83,10 +103,21 @@ func Sign(client kms.Client, opts *Opts, args []string) error {
 	return nil
 }
 
-// signData signs the input data using KMS and returns the signed data
-func signData(client kms.Client, keyId string, inputData []byte, clearSign, armor bool, digestHash crypto.Hash) ([]byte, error) {
+type signResult struct {
+	Data        []byte
+	Fingerprint string
+	PubkeyAlgo  int
+}
+
+// signData signs the input data using KMS and returns the signed data along with key metadata
+func signData(client kms.Client, keyId string, inputData []byte, clearSign, armor bool, digestHash crypto.Hash) (*signResult, error) {
 	// Get KMS key
 	key, err := client.GetKey(keyId)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := pgp.GetKeyInfo(key.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +128,16 @@ func signData(client kms.Client, keyId string, inputData []byte, clearSign, armo
 		return nil, fmt.Errorf("failed to sign data: %w", err)
 	}
 
-	return signedData, nil
+	return &signResult{
+		Data:        signedData,
+		Fingerprint: fmt.Sprintf("%X", info.Fingerprint),
+		PubkeyAlgo:  pgpAlgoNumber(key.PublicKey.Key.KeySpec),
+	}, nil
 }
 
-// determineInputSource reads input data from either stdin or file
-func determineInputSource(args []string) ([]byte, string, error) {
+// determineInputSource reads input data from either stdin, a regular file, or a
+// GPG special filename when explicitly enabled.
+func determineInputSource(args []string, enableSpecialFilenames bool) ([]byte, string, error) {
 	var inputData []byte
 	var inputName string
 	var err error
@@ -115,11 +151,28 @@ func determineInputSource(args []string) ([]byte, string, error) {
 		inputName = "stdin"
 	} else {
 		inputFile := args[0]
-		inputData, err = os.ReadFile(inputFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to read input file: %w", err)
+		if enableSpecialFilenames && strings.HasPrefix(inputFile, "-&") {
+			fdNum, err := strconv.Atoi(inputFile[2:])
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid file descriptor syntax %q: %w", inputFile, err)
+			}
+			f := os.NewFile(uintptr(fdNum), "input-fd")
+			if f == nil {
+				return nil, "", fmt.Errorf("invalid file descriptor: %d", fdNum)
+			}
+			inputData, err = io.ReadAll(f)
+			_ = f.Close()
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read from file descriptor %d: %w", fdNum, err)
+			}
+			inputName = inputFile
+		} else {
+			inputData, err = os.ReadFile(inputFile)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read input file: %w", err)
+			}
+			inputName = inputFile
 		}
-		inputName = inputFile
 	}
 
 	return inputData, inputName, nil

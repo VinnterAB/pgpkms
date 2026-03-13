@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"crypto/ecdsa"
 	"crypto/rsa"
@@ -20,6 +21,46 @@ import (
 	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
 	"golang.org/x/crypto/openpgp/packet"
 )
+
+// KeyInfo contains PGP key metadata extracted from a KMS public key
+type KeyInfo struct {
+	Fingerprint  [20]byte
+	KeyId        uint64
+	PubKeyAlgo   packet.PublicKeyAlgorithm
+	BitLength    uint16
+	CreationTime time.Time
+}
+
+// GetKeyInfo extracts PGP key information from a KMS public key
+func GetKeyInfo(publicKey *kms.PublicKey) (*KeyInfo, error) {
+	cryptoPubKey, err := publicKey.CryptoPublicKey()
+	if err != nil {
+		return nil, err
+	}
+
+	creationDate := *publicKey.Description.KeyMetadata.CreationDate
+	var pgpPubKey *packet.PublicKey
+	var bitLength uint16
+
+	switch pk := cryptoPubKey.(type) {
+	case *rsa.PublicKey:
+		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
+		bitLength = uint16(pk.N.BitLen())
+	case *ecdsa.PublicKey:
+		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
+		bitLength = uint16(pk.Curve.Params().BitSize)
+	default:
+		return nil, fmt.Errorf("unsupported public key type: %T", cryptoPubKey)
+	}
+
+	return &KeyInfo{
+		Fingerprint:  pgpPubKey.Fingerprint,
+		KeyId:        pgpPubKey.KeyId,
+		PubKeyAlgo:   pgpPubKey.PubKeyAlgo,
+		BitLength:    bitLength,
+		CreationTime: creationDate,
+	}, nil
+}
 
 func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, comment, email string) (*bytes.Buffer, error) {
 	pubKeyAny := signer.Public()
