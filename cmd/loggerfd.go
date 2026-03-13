@@ -40,6 +40,6 @@ func (lw *LoggerWriter) Log(format string, args ...any) {
 // Close closes the logger fd if active.
 func (lw *LoggerWriter) Close() {
 	if lw.active && lw.file != nil {
-		lw.file.Close()
+		_ = lw.file.Close()
 	}
 }

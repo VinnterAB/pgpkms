@@ -55,7 +55,7 @@ func (sw *StatusWriter) Emit(code string, args ...string) {
 // Close closes the status fd if active.
 func (sw *StatusWriter) Close() {
 	if sw.active && sw.file != nil {
-		sw.file.Close()
+		_ = sw.file.Close()
 	}
 }
 

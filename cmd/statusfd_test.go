@@ -15,14 +15,14 @@ import (
 func TestStatusWriterEmit(t *testing.T) {
 	r, w, err := os.Pipe()
 	assert.NilError(t, err)
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	fd := int(w.Fd())
 	sw := NewStatusWriter(&fd, false)
 
 	sw.Emit("KEY_CONSIDERED", "ABCD1234", "0")
 	sw.Emit("BEGIN_SIGNING", "H8")
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
@@ -36,13 +36,13 @@ func TestStatusWriterEmit(t *testing.T) {
 func TestStatusWriterEmitNoArgs(t *testing.T) {
 	r, w, err := os.Pipe()
 	assert.NilError(t, err)
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	fd := int(w.Fd())
 	sw := NewStatusWriter(&fd, false)
 
 	sw.Emit("GOODSIG")
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
@@ -67,8 +67,8 @@ func TestStatusWriterExitOnError(t *testing.T) {
 	sw := NewStatusWriter(&fd, true)
 
 	// Close the write end so writing will fail
-	w.Close()
-	r.Close()
+	_ = w.Close()
+	_ = r.Close()
 
 	var exitCode int
 	var exitCalled bool
@@ -96,17 +96,17 @@ func TestStatusWriterNoExitOnError(t *testing.T) {
 
 	// Close the pipe so writing will fail
 	// Close sw.file directly since it wraps the same fd
-	sw.file.Close()
-	r.Close()
+	_ = sw.file.Close()
+	_ = r.Close()
 
 	sw.Emit("TEST_CODE", "arg1")
 
-	sw2.Close()
+	_ = sw2.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	io.Copy(&buf, sr)
-	sr.Close()
+	_, _ = io.Copy(&buf, sr)
+	_ = sr.Close()
 
 	assert.Assert(t, strings.Contains(buf.String(), "status-fd write error"))
 }
@@ -114,7 +114,7 @@ func TestStatusWriterNoExitOnError(t *testing.T) {
 func TestStatusWriterClose(t *testing.T) {
 	r, w, err := os.Pipe()
 	assert.NilError(t, err)
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	fd := int(w.Fd())
 	sw := NewStatusWriter(&fd, false)
@@ -134,7 +134,7 @@ func TestSignWithStatusFd(t *testing.T) {
 	// Create status fd pipe
 	statusR, statusW, err := os.Pipe()
 	assert.NilError(t, err)
-	defer statusR.Close()
+	defer func() { _ = statusR.Close() }()
 
 	fd := int(statusW.Fd())
 	sw := NewStatusWriter(&fd, false)
@@ -142,14 +142,14 @@ func TestSignWithStatusFd(t *testing.T) {
 	// Create a temporary input file
 	tmpFile, err := os.CreateTemp("", "test-status-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("Hello, World!")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.Sign = true
@@ -160,10 +160,10 @@ func TestSignWithStatusFd(t *testing.T) {
 	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
-	statusW.Close()
+	_ = statusW.Close()
 
 	var buf bytes.Buffer
-	io.Copy(&buf, statusR)
+	_, _ = io.Copy(&buf, statusR)
 	output := buf.String()
 
 	lines := strings.Split(strings.TrimSpace(output), "\n")
@@ -182,14 +182,14 @@ func TestSignWithoutStatusFd(t *testing.T) {
 
 	tmpFile, err := os.CreateTemp("", "test-nostatus-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("Hello, World!")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.Sign = true
@@ -211,21 +211,21 @@ func TestSigCreatedFormatDetached(t *testing.T) {
 
 	statusR, statusW, err := os.Pipe()
 	assert.NilError(t, err)
-	defer statusR.Close()
+	defer func() { _ = statusR.Close() }()
 
 	fd := int(statusW.Fd())
 	sw := NewStatusWriter(&fd, false)
 
 	tmpFile, err := os.CreateTemp("", "test-detached-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("test data")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.Sign = true
@@ -236,10 +236,10 @@ func TestSigCreatedFormatDetached(t *testing.T) {
 	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
-	statusW.Close()
+	_ = statusW.Close()
 
 	var buf bytes.Buffer
-	io.Copy(&buf, statusR)
+	_, _ = io.Copy(&buf, statusR)
 	output := buf.String()
 
 	// Find SIG_CREATED line
@@ -264,21 +264,21 @@ func TestSigCreatedFormatClearSign(t *testing.T) {
 
 	statusR, statusW, err := os.Pipe()
 	assert.NilError(t, err)
-	defer statusR.Close()
+	defer func() { _ = statusR.Close() }()
 
 	fd := int(statusW.Fd())
 	sw := NewStatusWriter(&fd, false)
 
 	tmpFile, err := os.CreateTemp("", "test-clearsign-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("test data")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.ClearSign = true
@@ -288,10 +288,10 @@ func TestSigCreatedFormatClearSign(t *testing.T) {
 	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, sw, inactiveLoggerWriter())
 	assert.NilError(t, err)
 
-	statusW.Close()
+	_ = statusW.Close()
 
 	var buf bytes.Buffer
-	io.Copy(&buf, statusR)
+	_, _ = io.Copy(&buf, statusR)
 	output := buf.String()
 
 	// Find SIG_CREATED line

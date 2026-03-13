@@ -1081,14 +1081,14 @@ func TestDetachFlag(t *testing.T) {
 		// Create a temporary input file
 		tmpFile, err := os.CreateTemp("", "test-detach-*.txt")
 		assert.NilError(t, err)
-		t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+		t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 		_, err = tmpFile.WriteString("Hello, World!")
 		assert.NilError(t, err)
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		outputFile := tmpFile.Name() + ".asc"
-		t.Cleanup(func() { os.Remove(outputFile) })
+		t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 		keyId := "test-key-id"
 		opts.Sign = true
@@ -1133,7 +1133,7 @@ func TestDetermineInputSourceFd(t *testing.T) {
 
 		_, err = w.WriteString(testData)
 		assert.NilError(t, err)
-		w.Close()
+		_ = w.Close()
 
 		fdArg := fmt.Sprintf("-&%d", r.Fd())
 		inputData, inputName, err := determineInputSource([]string{fdArg})
@@ -1150,12 +1150,12 @@ func TestDetermineInputSourceFd(t *testing.T) {
 	t.Run("Regular file path still works", func(t *testing.T) {
 		tmpFile, err := os.CreateTemp("", "test-fd-*.txt")
 		assert.NilError(t, err)
-		t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+		t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 		testData := "regular file content"
 		_, err = tmpFile.WriteString(testData)
 		assert.NilError(t, err)
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		inputData, inputName, err := determineInputSource([]string{tmpFile.Name()})
 		assert.NilError(t, err)
@@ -1261,8 +1261,8 @@ func TestLooksLikeKMSIdentifier(t *testing.T) {
 		{"arn:aws:kms:us-east-1:123456789012:key/abc", true},
 		{"alias/my-key", true},
 		{"12345678-1234-1234-1234-123456789012", true},
-		{"D3E46FBE91F47A5F", false},       // hex key ID
-		{"Test User <test@test.com>", false}, // UID
+		{"D3E46FBE91F47A5F", false},                         // hex key ID
+		{"Test User <test@test.com>", false},                // UID
 		{"ABCDEF1234567890ABCDEF1234567890ABCDEF12", false}, // fingerprint
 	}
 
@@ -1325,10 +1325,10 @@ func TestListSecretKeys(t *testing.T) {
 		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		output := buf.String()
 
 		assert.Assert(t, strings.Contains(output, "sec"), "Should contain sec line")
@@ -1353,10 +1353,10 @@ func TestListSecretKeys(t *testing.T) {
 		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		output := buf.String()
 
 		assert.Assert(t, strings.Contains(output, "sec:u:"), "Should contain sec: line")
@@ -1381,10 +1381,10 @@ func TestListSecretKeys(t *testing.T) {
 		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		output := buf.String()
 
 		assert.Assert(t, strings.Contains(output, "AWS KMS Key <arn:aws:kms:us-east-1:123456789012:key/key1>"), "Should contain fallback UID")
@@ -1404,10 +1404,10 @@ func TestListSecretKeys(t *testing.T) {
 		err := ListSecretKeys(mockClient, &opts, nil, inactiveStatusWriter(), inactiveLoggerWriter())
 		assert.NilError(t, err)
 
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		output := buf.String()
 
 		assert.Equal(t, output, "", "Should produce no output for empty list")

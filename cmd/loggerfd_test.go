@@ -13,14 +13,14 @@ import (
 func TestLoggerWriterLog(t *testing.T) {
 	r, w, err := os.Pipe()
 	assert.NilError(t, err)
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	fd := int(w.Fd())
 	lw := NewLoggerWriter(&fd)
 
 	lw.Log("hello %s", "world")
 	lw.Log("count %d", 42)
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
@@ -52,17 +52,17 @@ func TestLoggerWriterWriteError(t *testing.T) {
 	os.Stderr = sw2
 
 	// Close the fd so writing will fail
-	lw.file.Close()
-	r.Close()
+	_ = lw.file.Close()
+	_ = r.Close()
 
 	lw.Log("this should fail")
 
-	sw2.Close()
+	_ = sw2.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	io.Copy(&buf, sr)
-	sr.Close()
+	_, _ = io.Copy(&buf, sr)
+	_ = sr.Close()
 
 	assert.Assert(t, strings.Contains(buf.String(), "logger-fd write error"))
 }
@@ -70,7 +70,7 @@ func TestLoggerWriterWriteError(t *testing.T) {
 func TestLoggerWriterClose(t *testing.T) {
 	r, w, err := os.Pipe()
 	assert.NilError(t, err)
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	fd := int(w.Fd())
 	lw := NewLoggerWriter(&fd)
@@ -90,7 +90,7 @@ func TestSignWithLoggerFd(t *testing.T) {
 	// Create logger fd pipe
 	loggerR, loggerW, err := os.Pipe()
 	assert.NilError(t, err)
-	defer loggerR.Close()
+	defer func() { _ = loggerR.Close() }()
 
 	fd := int(loggerW.Fd())
 	lw := NewLoggerWriter(&fd)
@@ -98,14 +98,14 @@ func TestSignWithLoggerFd(t *testing.T) {
 	// Create a temporary input file
 	tmpFile, err := os.CreateTemp("", "test-logger-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("Hello, World!")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.Sign = true
@@ -116,10 +116,10 @@ func TestSignWithLoggerFd(t *testing.T) {
 	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), lw)
 	assert.NilError(t, err)
 
-	loggerW.Close()
+	_ = loggerW.Close()
 
 	var buf bytes.Buffer
-	io.Copy(&buf, loggerR)
+	_, _ = io.Copy(&buf, loggerR)
 	output := buf.String()
 
 	assert.Assert(t, strings.Contains(output, "signing data for key"), "Should contain signing log message")
@@ -134,14 +134,14 @@ func TestSignWithoutLoggerFd(t *testing.T) {
 
 	tmpFile, err := os.CreateTemp("", "test-nologger-*.txt")
 	assert.NilError(t, err)
-	t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+	t.Cleanup(func() { _ = os.Remove(tmpFile.Name()) })
 
 	_, err = tmpFile.WriteString("Hello, World!")
 	assert.NilError(t, err)
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	outputFile := tmpFile.Name() + ".asc"
-	t.Cleanup(func() { os.Remove(outputFile) })
+	t.Cleanup(func() { _ = os.Remove(outputFile) })
 
 	keyId := "test-key-id"
 	opts.Sign = true

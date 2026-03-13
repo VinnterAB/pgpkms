@@ -160,7 +160,7 @@ func determineInputSource(args []string) ([]byte, string, error) {
 				return nil, "", fmt.Errorf("invalid file descriptor: %d", fdNum)
 			}
 			inputData, err = io.ReadAll(f)
-			f.Close()
+			_ = f.Close()
 			if err != nil {
 				return nil, "", fmt.Errorf("failed to read from file descriptor %d: %w", fdNum, err)
 			}
