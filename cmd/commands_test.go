@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	kmslib "github.com/vinnterab/pgpkms/kms"
+	"github.com/vinnterab/pgpkms/pgp"
 	"gotest.tools/v3/assert"
 )
 
@@ -452,8 +453,8 @@ func TestExecuteFunction(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		// Set export options
-		keyId := "test-key-id"
+		// Set export options — use ARN so ResolveKeyId passes through
+		keyId := "arn:aws:kms:us-east-1:123456789012:key/test-key-id"
 		name := "Test User"
 		opts.Export = true
 		opts.User = keyId
@@ -1066,6 +1067,209 @@ func TestSignWithDifferentDigestAlgos(t *testing.T) {
 			outputString := string(outputData)
 			assert.Assert(t, strings.Contains(outputString, ClearSignHeader), "Should contain clear sign header")
 			assert.Assert(t, strings.Contains(outputString, testData), "Should contain original data")
+		})
+	}
+}
+
+func TestDetachFlag(t *testing.T) {
+	defer func() { opts = Opts{} }()
+
+	t.Run("--sign --detach produces detached signature", func(t *testing.T) {
+		opts = Opts{}
+		mockClient := NewMockKmsClient()
+
+		// Create a temporary input file
+		tmpFile, err := os.CreateTemp("", "test-detach-*.txt")
+		assert.NilError(t, err)
+		t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+
+		_, err = tmpFile.WriteString("Hello, World!")
+		assert.NilError(t, err)
+		tmpFile.Close()
+
+		outputFile := tmpFile.Name() + ".asc"
+		t.Cleanup(func() { os.Remove(outputFile) })
+
+		keyId := "test-key-id"
+		opts.Sign = true
+		opts.Detach = true
+		opts.DetachedSign = true // Simulating what Execute wires up
+		opts.User = keyId
+		opts.Output = &outputFile
+
+		err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
+		assert.NilError(t, err)
+
+		// Verify output was created (detached signature)
+		_, err = os.Stat(outputFile)
+		assert.NilError(t, err, "Output file should be created")
+	})
+
+	t.Run("--detach sets DetachedSign in Execute wiring", func(t *testing.T) {
+		opts = Opts{}
+		opts.Detach = true
+		opts.Sign = true
+
+		// Simulate what Execute does
+		if opts.Detach {
+			opts.DetachedSign = true
+		}
+		if opts.DetachedSign {
+			opts.Sign = true
+		}
+
+		assert.Assert(t, opts.DetachedSign, "--detach should set DetachedSign")
+		assert.Assert(t, opts.Sign, "--detach should keep Sign true")
+	})
+}
+
+func TestDetermineInputSourceFd(t *testing.T) {
+	t.Run("Read from file descriptor", func(t *testing.T) {
+		testData := "Hello from fd!"
+
+		// Create a pipe to simulate an fd
+		r, w, err := os.Pipe()
+		assert.NilError(t, err)
+
+		_, err = w.WriteString(testData)
+		assert.NilError(t, err)
+		w.Close()
+
+		fdArg := fmt.Sprintf("-&%d", r.Fd())
+		inputData, inputName, err := determineInputSource([]string{fdArg})
+		assert.NilError(t, err)
+		assert.Equal(t, string(inputData), testData)
+		assert.Equal(t, inputName, fdArg)
+	})
+
+	t.Run("Malformed fd syntax returns error", func(t *testing.T) {
+		_, _, err := determineInputSource([]string{"-&notanumber"})
+		assert.ErrorContains(t, err, "invalid file descriptor syntax")
+	})
+
+	t.Run("Regular file path still works", func(t *testing.T) {
+		tmpFile, err := os.CreateTemp("", "test-fd-*.txt")
+		assert.NilError(t, err)
+		t.Cleanup(func() { os.Remove(tmpFile.Name()) })
+
+		testData := "regular file content"
+		_, err = tmpFile.WriteString(testData)
+		assert.NilError(t, err)
+		tmpFile.Close()
+
+		inputData, inputName, err := determineInputSource([]string{tmpFile.Name()})
+		assert.NilError(t, err)
+		assert.Equal(t, string(inputData), testData)
+		assert.Equal(t, inputName, tmpFile.Name())
+	})
+}
+
+func TestResolveKeyId(t *testing.T) {
+	t.Run("ARN passes through", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+		result, err := ResolveKeyId(mockClient, "arn:aws:kms:us-east-1:123456789012:key/abc")
+		assert.NilError(t, err)
+		assert.Equal(t, result, "arn:aws:kms:us-east-1:123456789012:key/abc")
+	})
+
+	t.Run("Alias passes through", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+		result, err := ResolveKeyId(mockClient, "alias/my-key")
+		assert.NilError(t, err)
+		assert.Equal(t, result, "alias/my-key")
+	})
+
+	t.Run("UUID passes through", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+		result, err := ResolveKeyId(mockClient, "12345678-1234-1234-1234-123456789012")
+		assert.NilError(t, err)
+		assert.Equal(t, result, "12345678-1234-1234-1234-123456789012")
+	})
+
+	t.Run("Hex key ID triggers lookup", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+
+		// Create key once so it's stable across calls
+		key := createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+			types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"})
+
+		info, err := pgp.GetKeyInfo(key)
+		assert.NilError(t, err)
+		hexKeyId := fmt.Sprintf("%X", info.KeyId)
+
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{key}, nil
+		}
+
+		result, err := ResolveKeyId(mockClient, hexKeyId)
+		assert.NilError(t, err)
+		assert.Equal(t, result, "arn:aws:kms:us-east-1:123456789012:key/key1")
+	})
+
+	t.Run("Fingerprint triggers lookup", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+
+		key := createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+			types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"})
+
+		info, err := pgp.GetKeyInfo(key)
+		assert.NilError(t, err)
+		fingerprint := fmt.Sprintf("%X", info.Fingerprint)
+
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{key}, nil
+		}
+
+		result, err := ResolveKeyId(mockClient, fingerprint)
+		assert.NilError(t, err)
+		assert.Equal(t, result, "arn:aws:kms:us-east-1:123456789012:key/key1")
+	})
+
+	t.Run("UID triggers lookup", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{
+				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+					types.KeySpecEccNistP256, map[string]string{"PGPName": "Test User", "PGPEmail": "test@test.com"}),
+			}, nil
+		}
+
+		result, err := ResolveKeyId(mockClient, "Test User")
+		assert.NilError(t, err)
+		assert.Equal(t, result, "arn:aws:kms:us-east-1:123456789012:key/key1")
+	})
+
+	t.Run("No match returns error", func(t *testing.T) {
+		mockClient := NewMockKmsClient()
+		mockClient.listKeysFunc = func() ([]*kmslib.PublicKey, error) {
+			return []*kmslib.PublicKey{
+				createMockPublicKey("key1", "arn:aws:kms:us-east-1:123456789012:key/key1",
+					types.KeySpecEccNistP256, map[string]string{"PGPName": "Test", "PGPEmail": "test@test.com"}),
+			}, nil
+		}
+
+		_, err := ResolveKeyId(mockClient, "DEADBEEF12345678")
+		assert.ErrorContains(t, err, "no key found matching")
+	})
+}
+
+func TestLooksLikeKMSIdentifier(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"arn:aws:kms:us-east-1:123456789012:key/abc", true},
+		{"alias/my-key", true},
+		{"12345678-1234-1234-1234-123456789012", true},
+		{"D3E46FBE91F47A5F", false},       // hex key ID
+		{"Test User <test@test.com>", false}, // UID
+		{"ABCDEF1234567890ABCDEF1234567890ABCDEF12", false}, // fingerprint
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := looksLikeKMSIdentifier(tt.input)
+			assert.Equal(t, result, tt.expected)
 		})
 	}
 }

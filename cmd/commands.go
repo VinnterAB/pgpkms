@@ -64,6 +64,10 @@ func Execute(client kms.Client) error {
 		opts.ClearSign = true
 	}
 
+	if opts.Detach {
+		opts.DetachedSign = true
+	}
+
 	if opts.DetachedSign && opts.ClearSign {
 		return errors.New("conflicting commands")
 	}

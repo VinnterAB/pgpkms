@@ -28,4 +28,6 @@ type Opts struct {
 	NoSkComments           bool    `long:"no-sk-comments" description:"No secret key comments (accepted for GPG compatibility)"`
 	HomeDir                *string `long:"homedir" description:"GPG home directory (accepted for GPG compatibility)"`
 	LcCtype                *string `long:"lc-ctype" description:"Locale ctype (accepted for GPG compatibility)"`
+	EnableSpecialFilenames bool    `long:"enable-special-filenames" description:"Enable special filenames (accepted for GPG compatibility)"`
+	Detach                 bool    `long:"detach" description:"Produce a detached signature (used with --sign)"`
 }

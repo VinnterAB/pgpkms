@@ -2,17 +2,20 @@ package cmd
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/vinnterab/pgpkms/kms"
 	"github.com/vinnterab/pgpkms/pgp"
 )
 
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
 // ResolveKeyId resolves a user-provided key identifier to a KMS key ARN.
-// If the identifier looks like an ARN or UUID, it is returned as-is.
+// If the identifier looks like a KMS identifier (ARN, alias, UUID), it is returned as-is.
 // Otherwise, keys are listed and matched by UID, fingerprint, or key ID.
 func ResolveKeyId(client kms.Client, user string) (string, error) {
-	if !looksLikeUID(user) {
+	if looksLikeKMSIdentifier(user) {
 		return user, nil
 	}
 
@@ -42,6 +45,10 @@ func ResolveKeyId(client kms.Client, user string) (string, error) {
 	return "", fmt.Errorf("no key found matching %q", user)
 }
 
-func looksLikeUID(s string) bool {
-	return strings.ContainsAny(s, " <@")
+// looksLikeKMSIdentifier returns true if the string looks like something
+// KMS can resolve directly: an ARN, an alias, or a UUID.
+func looksLikeKMSIdentifier(s string) bool {
+	return strings.HasPrefix(s, "arn:") ||
+		strings.HasPrefix(s, "alias/") ||
+		uuidPattern.MatchString(s)
 }

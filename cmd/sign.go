@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,11 +150,28 @@ func determineInputSource(args []string) ([]byte, string, error) {
 		inputName = "stdin"
 	} else {
 		inputFile := args[0]
-		inputData, err = os.ReadFile(inputFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to read input file: %w", err)
+		if strings.HasPrefix(inputFile, "-&") {
+			fdNum, err := strconv.Atoi(inputFile[2:])
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid file descriptor syntax %q: %w", inputFile, err)
+			}
+			f := os.NewFile(uintptr(fdNum), "input-fd")
+			if f == nil {
+				return nil, "", fmt.Errorf("invalid file descriptor: %d", fdNum)
+			}
+			inputData, err = io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read from file descriptor %d: %w", fdNum, err)
+			}
+			inputName = inputFile
+		} else {
+			inputData, err = os.ReadFile(inputFile)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to read input file: %w", err)
+			}
+			inputName = inputFile
 		}
-		inputName = inputFile
 	}
 
 	return inputData, inputName, nil
