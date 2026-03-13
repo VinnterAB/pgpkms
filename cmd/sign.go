@@ -45,7 +45,7 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	}
 
 	// Determine input source
-	inputData, inputName, err := determineInputSource(args)
+	inputData, inputName, err := determineInputSource(args, opts.EnableSpecialFilenames)
 	if err != nil {
 		return err
 	}
@@ -135,8 +135,9 @@ func signData(client kms.Client, keyId string, inputData []byte, clearSign, armo
 	}, nil
 }
 
-// determineInputSource reads input data from either stdin or file
-func determineInputSource(args []string) ([]byte, string, error) {
+// determineInputSource reads input data from either stdin, a regular file, or a
+// GPG special filename when explicitly enabled.
+func determineInputSource(args []string, enableSpecialFilenames bool) ([]byte, string, error) {
 	var inputData []byte
 	var inputName string
 	var err error
@@ -150,7 +151,7 @@ func determineInputSource(args []string) ([]byte, string, error) {
 		inputName = "stdin"
 	} else {
 		inputFile := args[0]
-		if strings.HasPrefix(inputFile, "-&") {
+		if enableSpecialFilenames && strings.HasPrefix(inputFile, "-&") {
 			fdNum, err := strconv.Atoi(inputFile[2:])
 			if err != nil {
 				return nil, "", fmt.Errorf("invalid file descriptor syntax %q: %w", inputFile, err)

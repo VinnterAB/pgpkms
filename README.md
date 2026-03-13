@@ -70,7 +70,14 @@ pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-
 
 # Sign data from stdin to stdout
 echo "Hello, World!" | pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+
+# Sign data from an already-open file descriptor
+pgpkms --enable-special-filenames --sign \
+       -u arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012 \
+       -&3
 ```
+
+When `--enable-special-filenames` is set, positional input filenames may use GPG-style special filename syntax. `-&N` reads input from the already-open file descriptor `N`.
 
 ### Clear Text Signing
 
@@ -109,7 +116,7 @@ echo "This is a test message" | pgpkms --clear-sign -u arn:aws:kms:us-east-1:123
 | `--logger-fd` | | Write log info to a file descriptor |
 | `--exit-on-status-write-error` | | Exit if writing to status-fd fails |
 | `--enable-progress-filter` | | Enable progress indicator reporting |
-| `--enable-special-filenames` | | *No-op.* Accepted for GPG compatibility |
+| `--enable-special-filenames` | | Enable GPG special filenames such as `-&N` for positional input |
 | `--charset` | | *No-op.* Accepted for GPG compatibility |
 | `--batch` | | *No-op.* Accepted for GPG compatibility |
 | `--no-tty` | | *No-op.* Accepted for GPG compatibility |

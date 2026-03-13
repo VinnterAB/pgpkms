@@ -952,7 +952,7 @@ func TestDetermineInputSource(t *testing.T) {
 		assert.NilError(t, err)
 
 		args := []string{tmpFile.Name()}
-		inputData, inputName, err := determineInputSource(args)
+		inputData, inputName, err := determineInputSource(args, false)
 		assert.NilError(t, err)
 		assert.Equal(t, string(inputData), testData)
 		assert.Equal(t, inputName, tmpFile.Name())
@@ -979,7 +979,7 @@ func TestDetermineInputSource(t *testing.T) {
 		}()
 
 		args := []string{} // No file argument
-		inputData, inputName, err := determineInputSource(args)
+		inputData, inputName, err := determineInputSource(args, false)
 
 		// Restore stdin
 		os.Stdin = oldStdin
@@ -991,7 +991,7 @@ func TestDetermineInputSource(t *testing.T) {
 
 	t.Run("Nonexistent file should fail", func(t *testing.T) {
 		args := []string{"nonexistent-file.txt"}
-		_, _, err := determineInputSource(args)
+		_, _, err := determineInputSource(args, false)
 		assert.ErrorContains(t, err, "failed to read input file")
 	})
 }
@@ -1227,7 +1227,7 @@ func TestDetachFlag(t *testing.T) {
 }
 
 func TestDetermineInputSourceFd(t *testing.T) {
-	t.Run("Read from file descriptor", func(t *testing.T) {
+	t.Run("Read from file descriptor when enabled", func(t *testing.T) {
 		testData := "Hello from fd!"
 
 		// Create a pipe to simulate an fd
@@ -1239,15 +1239,28 @@ func TestDetermineInputSourceFd(t *testing.T) {
 		_ = w.Close()
 
 		fdArg := fmt.Sprintf("-&%d", r.Fd())
-		inputData, inputName, err := determineInputSource([]string{fdArg})
+		inputData, inputName, err := determineInputSource([]string{fdArg}, true)
 		assert.NilError(t, err)
 		assert.Equal(t, string(inputData), testData)
 		assert.Equal(t, inputName, fdArg)
 	})
 
-	t.Run("Malformed fd syntax returns error", func(t *testing.T) {
-		_, _, err := determineInputSource([]string{"-&notanumber"})
+	t.Run("Malformed fd syntax returns error when enabled", func(t *testing.T) {
+		_, _, err := determineInputSource([]string{"-&notanumber"}, true)
 		assert.ErrorContains(t, err, "invalid file descriptor syntax")
+	})
+
+	t.Run("Special filename syntax is ignored when disabled", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		inputPath := tmpDir + "/-&3"
+
+		err := os.WriteFile(inputPath, []byte("literal file content"), 0o600)
+		assert.NilError(t, err)
+
+		inputData, inputName, err := determineInputSource([]string{inputPath}, false)
+		assert.NilError(t, err)
+		assert.Equal(t, string(inputData), "literal file content")
+		assert.Equal(t, inputName, inputPath)
 	})
 
 	t.Run("Regular file path still works", func(t *testing.T) {
@@ -1260,7 +1273,7 @@ func TestDetermineInputSourceFd(t *testing.T) {
 		assert.NilError(t, err)
 		_ = tmpFile.Close()
 
-		inputData, inputName, err := determineInputSource([]string{tmpFile.Name()})
+		inputData, inputName, err := determineInputSource([]string{tmpFile.Name()}, false)
 		assert.NilError(t, err)
 		assert.Equal(t, string(inputData), testData)
 		assert.Equal(t, inputName, tmpFile.Name())
