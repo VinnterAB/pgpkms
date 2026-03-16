@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"io"
 	"strings"
@@ -138,4 +139,95 @@ func TestSerialize(t *testing.T) {
 		assert.Assert(t, strings.Contains(output, "-----BEGIN PGP PUBLIC KEY BLOCK-----"))
 		assert.Assert(t, strings.Contains(output, "-----END PGP PUBLIC KEY BLOCK-----"))
 	})
+}
+
+func TestGetKeyInfo_ECDSA(t *testing.T) {
+	mockSigner := NewMockSigner()
+	pubKey := mockSigner.Public().(*ecdsa.PublicKey)
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
+	assert.NilError(t, err)
+
+	keyId := "test-key-id"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/test-key-id"
+	creationDate := time.Date(2026, 1, 13, 12, 0, 0, 0, time.UTC)
+
+	kmsPublicKey := &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &creationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: pubKeyBytes,
+			KeySpec:   types.KeySpecEccNistP256,
+		},
+	}
+
+	info, err := GetKeyInfo(kmsPublicKey)
+	assert.NilError(t, err)
+	assert.Assert(t, info.Fingerprint != [20]byte{}, "Fingerprint should not be zero")
+	assert.Assert(t, info.KeyId != 0, "KeyId should not be zero")
+	assert.Equal(t, info.BitLength, uint16(256))
+	assert.Equal(t, info.CreationTime, creationDate)
+}
+
+func TestGetKeyInfo_RSA(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NilError(t, err)
+
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&rsaKey.PublicKey)
+	assert.NilError(t, err)
+
+	keyId := "test-rsa-key"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/test-rsa-key"
+	creationDate := time.Date(2026, 1, 13, 12, 0, 0, 0, time.UTC)
+
+	kmsPublicKey := &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &creationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: pubKeyBytes,
+			KeySpec:   types.KeySpecRsa2048,
+		},
+	}
+
+	info, err := GetKeyInfo(kmsPublicKey)
+	assert.NilError(t, err)
+	assert.Assert(t, info.Fingerprint != [20]byte{}, "Fingerprint should not be zero")
+	assert.Assert(t, info.KeyId != 0, "KeyId should not be zero")
+	assert.Equal(t, info.BitLength, uint16(2048))
+	assert.Equal(t, info.CreationTime, creationDate)
+}
+
+func TestGetKeyInfo_InvalidKey(t *testing.T) {
+	keyId := "test-bad-key"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/test-bad-key"
+	creationDate := time.Date(2026, 1, 13, 12, 0, 0, 0, time.UTC)
+
+	kmsPublicKey := &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &creationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: []byte("invalid key data"),
+			KeySpec:   types.KeySpecEccNistP256,
+		},
+	}
+
+	_, err := GetKeyInfo(kmsPublicKey)
+	assert.ErrorContains(t, err, "failed to parse public key")
 }
