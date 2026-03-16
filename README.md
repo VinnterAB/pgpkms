@@ -139,7 +139,7 @@ echo "This is a test message" | pgpkms --clear-sign -u arn:aws:kms:us-east-1:123
 
 2. **Export the public key**:
    ```bash
-   pgpkms --export arn:aws:kms:us-east-1:123456789012:key/your-key-id \
+   pgpkms --export -u arn:aws:kms:us-east-1:123456789012:key/your-key-id \
           --export-name "Your Name" \
           --export-email "your.email@example.com" \
           --armor > publickey.asc
@@ -147,7 +147,7 @@ echo "This is a test message" | pgpkms --clear-sign -u arn:aws:kms:us-east-1:123
 
 3. **Sign a document**:
    ```bash
-   pgpkms --sign arn:aws:kms:us-east-1:123456789012:key/your-key-id document.txt
+   pgpkms --sign -u arn:aws:kms:us-east-1:123456789012:key/your-key-id document.txt
    ```
 
 4. **Verify the signature** (using standard PGP tools):
@@ -162,10 +162,10 @@ Use pgpkms in CI/CD pipelines for secure artifact signing:
 
 ```bash
 # Sign release artifacts
-pgpkms --sign $KMS_KEY_ARN release.tar.gz
+pgpkms --sign -u $KMS_KEY_ARN release.tar.gz
 
 # Create detached signature
-pgpkms --sign $KMS_KEY_ARN release.tar.gz -o release.tar.gz.sig
+pgpkms --sign -u $KMS_KEY_ARN release.tar.gz -o release.tar.gz.sig
 ```
 
 ### OSTree Commit Signing
