@@ -16,7 +16,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21.x"
+          go-version: "1.25.x"
       - name: Install dependencies
         run: go get .
       - name: Build
@@ -24,9 +24,9 @@ jobs:
       - name: Vet (static analysis)
         run: go vet ./...
       - name: Run linters
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.1
+          version: v2.11.3
       - name: Test with coverage
         run: go test -cover ./...
       - name: Vulnerability scan
