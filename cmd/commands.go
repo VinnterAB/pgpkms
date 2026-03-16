@@ -34,7 +34,7 @@ func Execute(client kms.Client) error {
 				return nil
 			}
 		}
-		fmt.Fprintf(os.Stderr, "%s", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
