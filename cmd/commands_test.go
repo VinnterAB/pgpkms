@@ -834,7 +834,7 @@ func TestDetermineOutputWriter(t *testing.T) {
 		args := []string{} // No input file
 		inputName := "stdin"
 
-		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
+		writer, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
 
 		t.Cleanup(func() {
@@ -843,7 +843,6 @@ func TestDetermineOutputWriter(t *testing.T) {
 			}
 		})
 
-		assert.Equal(t, outputFile, "")
 		_, ok := writer.(stdoutWriteCloser)
 		assert.Assert(t, ok, "Should return stdoutWriteCloser")
 	})
@@ -853,21 +852,22 @@ func TestDetermineOutputWriter(t *testing.T) {
 		args := []string{"test.txt"} // Has input file
 		inputName := "test.txt"
 
-		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
+		writer, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
+
+		fileWriter, ok := writer.(*os.File)
+		assert.Assert(t, ok, "Should return *os.File")
 
 		t.Cleanup(func() {
 			if err := writer.Close(); err != nil {
 				t.Logf("close failed: %v", err)
 			}
-			if err := os.Remove(outputFile); err != nil {
+			if err := os.Remove(fileWriter.Name()); err != nil {
 				t.Logf("remove failed: %v", err)
 			}
 		})
 
-		assert.Equal(t, outputFile, "test.txt.asc")
-		_, ok := writer.(*os.File)
-		assert.Assert(t, ok, "Should return *os.File")
+		assert.Equal(t, fileWriter.Name(), "test.txt.asc")
 	})
 
 	t.Run("With explicit output file", func(t *testing.T) {
@@ -887,17 +887,18 @@ func TestDetermineOutputWriter(t *testing.T) {
 		args := []string{"test.txt"}
 		inputName := "test.txt"
 
-		writer, outputFile, err := determineOutputWriter(args, &opts, inputName)
+		writer, err := determineOutputWriter(args, &opts, inputName)
 		assert.NilError(t, err)
+
+		fileWriter, ok := writer.(*os.File)
+		assert.Assert(t, ok, "Should return *os.File")
 		t.Cleanup(func() {
 			if err := writer.Close(); err != nil {
 				t.Logf("writer cleanup failed: %v", err)
 			}
 		})
 
-		assert.Equal(t, outputFile, customOutput)
-		_, ok := writer.(*os.File)
-		assert.Assert(t, ok, "Should return *os.File")
+		assert.Equal(t, fileWriter.Name(), customOutput)
 	})
 
 	t.Run("Input file with .asc extension should fail", func(t *testing.T) {
@@ -905,7 +906,7 @@ func TestDetermineOutputWriter(t *testing.T) {
 		args := []string{"test.asc"}
 		inputName := "test.asc"
 
-		_, _, err := determineOutputWriter(args, &opts, inputName)
+		_, err := determineOutputWriter(args, &opts, inputName)
 		assert.ErrorContains(t, err, "already has .asc extension")
 	})
 
@@ -929,7 +930,7 @@ func TestDetermineOutputWriter(t *testing.T) {
 		inputName := "test.txt"
 		opts.Output = &tmpFileName
 
-		_, _, err = determineOutputWriter(args, &opts, inputName)
+		_, err = determineOutputWriter(args, &opts, inputName)
 		assert.ErrorContains(t, err, "already exists")
 	})
 }

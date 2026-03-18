@@ -64,7 +64,7 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	sw.Emit("BEGIN_SIGNING", fmt.Sprintf("H%d", hashAlgo))
 
 	// Determine output writer and write
-	writer, _, err := determineOutputWriter(args, opts, inputName)
+	writer, err := determineOutputWriter(args, opts, inputName)
 	if err != nil {
 		return err
 	}
@@ -187,12 +187,12 @@ func (s stdoutWriteCloser) Close() error {
 	return nil
 }
 
-// determineOutputWriter decides whether to write to stdout or file and returns appropriate io.WriteCloser
-func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, string, error) {
+// determineOutputWriter decides whether to write to stdout or a file.
+func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, error) {
 	// Write to stdout when reading from stdin or a special filename (file descriptor),
 	// since GPGME expects the signature on stdout in these cases.
 	if opts.Output == nil && (len(args) == 0 || strings.HasPrefix(inputName, "-&")) {
-		return stdoutWriteCloser{}, "", nil
+		return stdoutWriteCloser{}, nil
 	}
 
 	// Determine output file
@@ -204,22 +204,22 @@ func determineOutputWriter(args []string, opts *Opts, inputName string) (io.Writ
 	} else {
 		outputFile, err = getOutputFile(inputName, nil)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 
 	// Check if output file already exists
 	if _, err := os.Stat(outputFile); err == nil {
-		return nil, "", fmt.Errorf("output file %s already exists", outputFile)
+		return nil, fmt.Errorf("output file %s already exists", outputFile)
 	}
 
 	// Create and return the file
 	file, err := os.Create(outputFile)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create output file: %w", err)
+		return nil, fmt.Errorf("failed to create output file: %w", err)
 	}
 
-	return file, outputFile, nil
+	return file, nil
 }
 
 func getOutputFile(inputFile string, outputOpt *string) (string, error) {
