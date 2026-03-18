@@ -64,7 +64,7 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	sw.Emit("BEGIN_SIGNING", fmt.Sprintf("H%d", hashAlgo))
 
 	// Determine output writer and write
-	writer, outputFile, err := determineOutputWriter(args, opts, inputName)
+	writer, err := determineOutputWriter(args, opts, inputName)
 	if err != nil {
 		return err
 	}
@@ -90,15 +90,6 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 
 	sw.Emit("SIG_CREATED", sigType, fmt.Sprintf("%d", result.PubkeyAlgo), fmt.Sprintf("%d", hashAlgo), sigClass, timestamp, result.Fingerprint)
-
-	// Print status message if writing to file
-	if outputFile != "" {
-		if opts.ClearSign {
-			fmt.Printf("Clear Signed %s -> %s\n", inputName, outputFile)
-		} else {
-			fmt.Printf("Signed %s -> %s\n", inputName, outputFile)
-		}
-	}
 
 	return nil
 }
@@ -196,11 +187,12 @@ func (s stdoutWriteCloser) Close() error {
 	return nil
 }
 
-// determineOutputWriter decides whether to write to stdout or file and returns appropriate io.WriteCloser
-func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, string, error) {
-	// If reading from stdin and no output file specified, write to stdout
-	if len(args) == 0 && opts.Output == nil {
-		return stdoutWriteCloser{}, "", nil
+// determineOutputWriter decides whether to write to stdout or a file.
+func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, error) {
+	// Write to stdout when reading from stdin or a special filename (file descriptor),
+	// since GPGME expects the signature on stdout in these cases.
+	if opts.Output == nil && (len(args) == 0 || strings.HasPrefix(inputName, "-&")) {
+		return stdoutWriteCloser{}, nil
 	}
 
 	// Determine output file
@@ -212,22 +204,22 @@ func determineOutputWriter(args []string, opts *Opts, inputName string) (io.Writ
 	} else {
 		outputFile, err = getOutputFile(inputName, nil)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 
 	// Check if output file already exists
 	if _, err := os.Stat(outputFile); err == nil {
-		return nil, "", fmt.Errorf("output file %s already exists", outputFile)
+		return nil, fmt.Errorf("output file %s already exists", outputFile)
 	}
 
 	// Create and return the file
 	file, err := os.Create(outputFile)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create output file: %w", err)
+		return nil, fmt.Errorf("failed to create output file: %w", err)
 	}
 
-	return file, outputFile, nil
+	return file, nil
 }
 
 func getOutputFile(inputFile string, outputOpt *string) (string, error) {
