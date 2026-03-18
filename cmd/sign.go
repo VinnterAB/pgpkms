@@ -64,7 +64,7 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	sw.Emit("BEGIN_SIGNING", fmt.Sprintf("H%d", hashAlgo))
 
 	// Determine output writer and write
-	writer, outputFile, err := determineOutputWriter(args, opts, inputName)
+	writer, _, err := determineOutputWriter(args, opts, inputName)
 	if err != nil {
 		return err
 	}
@@ -90,15 +90,6 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 
 	sw.Emit("SIG_CREATED", sigType, fmt.Sprintf("%d", result.PubkeyAlgo), fmt.Sprintf("%d", hashAlgo), sigClass, timestamp, result.Fingerprint)
-
-	// Print status message if writing to file
-	if outputFile != "" {
-		if opts.ClearSign {
-			fmt.Printf("Clear Signed %s -> %s\n", inputName, outputFile)
-		} else {
-			fmt.Printf("Signed %s -> %s\n", inputName, outputFile)
-		}
-	}
 
 	return nil
 }
@@ -198,8 +189,9 @@ func (s stdoutWriteCloser) Close() error {
 
 // determineOutputWriter decides whether to write to stdout or file and returns appropriate io.WriteCloser
 func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, string, error) {
-	// If reading from stdin and no output file specified, write to stdout
-	if len(args) == 0 && opts.Output == nil {
+	// Write to stdout when reading from stdin or a special filename (file descriptor),
+	// since GPGME expects the signature on stdout in these cases.
+	if opts.Output == nil && (len(args) == 0 || strings.HasPrefix(inputName, "-&")) {
 		return stdoutWriteCloser{}, "", nil
 	}
 

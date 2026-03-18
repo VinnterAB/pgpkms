@@ -145,6 +145,15 @@ func TestSignWithStatusFd(t *testing.T) {
 	opts = Opts{}
 	mockClient := NewMockKmsClient()
 
+	// Capture stdout to verify Sign() doesn't leak to it
+	stdoutR, stdoutW, err := os.Pipe()
+	assert.NilError(t, err)
+	defer func() { _ = stdoutR.Close() }()
+
+	oldStdout := os.Stdout
+	os.Stdout = stdoutW
+	defer func() { os.Stdout = oldStdout }()
+
 	// Create status fd pipe
 	statusR, statusW, err := os.Pipe()
 	assert.NilError(t, err)
@@ -175,6 +184,7 @@ func TestSignWithStatusFd(t *testing.T) {
 	assert.NilError(t, err)
 
 	_ = statusW.Close()
+	_ = stdoutW.Close()
 
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, statusR)
@@ -186,6 +196,11 @@ func TestSignWithStatusFd(t *testing.T) {
 	assert.Assert(t, strings.HasPrefix(lines[0], "[GNUPG:] KEY_CONSIDERED"), "First line should be KEY_CONSIDERED, got: %s", lines[0])
 	assert.Assert(t, strings.HasPrefix(lines[1], "[GNUPG:] BEGIN_SIGNING"), "Second line should be BEGIN_SIGNING, got: %s", lines[1])
 	assert.Assert(t, strings.HasPrefix(lines[2], "[GNUPG:] SIG_CREATED"), "Third line should be SIG_CREATED, got: %s", lines[2])
+
+	// Verify nothing was written to stdout (GPGME reads stdout for signature data)
+	var stdoutBuf bytes.Buffer
+	_, _ = io.Copy(&stdoutBuf, stdoutR)
+	assert.Equal(t, stdoutBuf.String(), "", "Sign() must not write to stdout when output goes to file")
 }
 
 func TestSignWithoutStatusFd(t *testing.T) {
@@ -193,6 +208,15 @@ func TestSignWithoutStatusFd(t *testing.T) {
 
 	opts = Opts{}
 	mockClient := NewMockKmsClient()
+
+	// Capture stdout to verify Sign() doesn't leak to it
+	stdoutR, stdoutW, err := os.Pipe()
+	assert.NilError(t, err)
+	defer func() { _ = stdoutR.Close() }()
+
+	oldStdout := os.Stdout
+	os.Stdout = stdoutW
+	defer func() { os.Stdout = oldStdout }()
 
 	tmpFile, err := os.CreateTemp("", "test-nostatus-*.txt")
 	assert.NilError(t, err)
@@ -213,8 +237,15 @@ func TestSignWithoutStatusFd(t *testing.T) {
 	err = Sign(mockClient, &opts, []string{tmpFile.Name()}, inactiveStatusWriter(), inactiveLoggerWriter())
 	assert.NilError(t, err)
 
+	_ = stdoutW.Close()
+
 	_, err = os.Stat(outputFile)
 	assert.NilError(t, err, "Output file should be created")
+
+	// Verify nothing was written to stdout (GPGME reads stdout for signature data)
+	var stdoutBuf bytes.Buffer
+	_, _ = io.Copy(&stdoutBuf, stdoutR)
+	assert.Equal(t, stdoutBuf.String(), "", "Sign() must not write to stdout when output goes to file")
 }
 
 func TestSigCreatedFormatDetached(t *testing.T) {
