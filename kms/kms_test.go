@@ -284,6 +284,81 @@ func TestAWSKmsClient_ListKeys_FillsTags(t *testing.T) {
 	assert.DeepEqual(t, keys[0].Tags, map[string]string{"team": "infra"})
 }
 
+func TestPublicKey_PGPCreationTime_NoTag(t *testing.T) {
+	keyId := "test-key-id"
+	creationDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	publicKey := &PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				CreationDate: &creationDate,
+			},
+		},
+		Tags: map[string]string{},
+	}
+
+	result, err := publicKey.PGPCreationTime()
+	assert.NilError(t, err)
+	assert.Equal(t, result, creationDate)
+}
+
+func TestPublicKey_PGPCreationTime_NilTags(t *testing.T) {
+	keyId := "test-key-id"
+	creationDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	publicKey := &PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				CreationDate: &creationDate,
+			},
+		},
+	}
+
+	result, err := publicKey.PGPCreationTime()
+	assert.NilError(t, err)
+	assert.Equal(t, result, creationDate)
+}
+
+func TestPublicKey_PGPCreationTime_ValidTag(t *testing.T) {
+	keyId := "test-key-id"
+	kmsCreationDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	originalCreation := time.Date(2020, 3, 1, 12, 0, 0, 0, time.UTC)
+	publicKey := &PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				CreationDate: &kmsCreationDate,
+			},
+		},
+		Tags: map[string]string{
+			"PGPCreationTime": originalCreation.Format(time.RFC3339),
+		},
+	}
+
+	result, err := publicKey.PGPCreationTime()
+	assert.NilError(t, err)
+	assert.Equal(t, result, originalCreation)
+}
+
+func TestPublicKey_PGPCreationTime_MalformedTag(t *testing.T) {
+	keyId := "test-key-id"
+	creationDate := time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC)
+	publicKey := &PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				CreationDate: &creationDate,
+			},
+		},
+		Tags: map[string]string{
+			"PGPCreationTime": "not-a-date",
+		},
+	}
+
+	_, err := publicKey.PGPCreationTime()
+	assert.ErrorContains(t, err, "invalid PGPCreationTime tag value")
+}
+
 func TestKMSSigner_Public(t *testing.T) {
 	// Create test key data
 	privateKey, pubKeyBytes, err := createTestECDSAKey()

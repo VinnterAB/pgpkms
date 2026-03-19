@@ -38,7 +38,10 @@ func GetKeyInfo(publicKey *kms.PublicKey) (*KeyInfo, error) {
 		return nil, err
 	}
 
-	creationDate := *publicKey.Description.KeyMetadata.CreationDate
+	creationDate, err := publicKey.PGPCreationTime()
+	if err != nil {
+		return nil, err
+	}
 	var pgpPubKey *packet.PublicKey
 	var bitLength uint16
 
@@ -65,13 +68,16 @@ func GetKeyInfo(publicKey *kms.PublicKey) (*KeyInfo, error) {
 func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, comment, email string) (*bytes.Buffer, error) {
 	pubKeyAny := signer.Public()
 
-	creationDate := kmsKey.Description.KeyMetadata.CreationDate
+	creationDate, err := kmsKey.PGPCreationTime()
+	if err != nil {
+		return nil, err
+	}
 	var pgpPubKey *packet.PublicKey
 	switch pk := pubKeyAny.(type) {
 	case *rsa.PublicKey:
-		pgpPubKey = packet.NewRSAPublicKey(*creationDate, pk)
+		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
 	case *ecdsa.PublicKey:
-		pgpPubKey = packet.NewECDSAPublicKey(*creationDate, pk)
+		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
 	default:
 		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
 	}
@@ -101,13 +107,13 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 			SigType:      packet.SigTypePositiveCert,
 			PubKeyAlgo:   pgpPubKey.PubKeyAlgo,
 			Hash:         crypto.SHA256,
-			CreationTime: *creationDate,
+			CreationTime: creationDate,
 			IssuerKeyId:  &pgpPubKey.KeyId,
 		},
 	}
 
 	// Sign the user ID with the primary key
-	err := identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, &packet.Config{
+	err = identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, &packet.Config{
 		DefaultHash: crypto.SHA256,
 	})
 	if err != nil {
@@ -150,13 +156,16 @@ func serialize(entity *openpgp.Entity, armored bool) (*bytes.Buffer, error) {
 func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSign, armor bool, digestHash crypto.Hash) ([]byte, error) {
 	pubKeyAny := signer.Public()
 
-	creationDate := kmsKey.Description.KeyMetadata.CreationDate
+	creationDate, err := kmsKey.PGPCreationTime()
+	if err != nil {
+		return nil, err
+	}
 	var pgpPubKey *packet.PublicKey
 	switch pk := pubKeyAny.(type) {
 	case *rsa.PublicKey:
-		pgpPubKey = packet.NewRSAPublicKey(*creationDate, pk)
+		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
 	case *ecdsa.PublicKey:
-		pgpPubKey = packet.NewECDSAPublicKey(*creationDate, pk)
+		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
 	default:
 		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
 	}

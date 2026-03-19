@@ -208,6 +208,67 @@ func TestGetKeyInfo_RSA(t *testing.T) {
 	assert.Equal(t, info.CreationTime, creationDate)
 }
 
+func TestGetKeyInfo_PGPCreationTimeTag(t *testing.T) {
+	mockSigner := NewMockSigner()
+	pubKey := mockSigner.Public().(*ecdsa.PublicKey)
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
+	assert.NilError(t, err)
+
+	keyId := "test-key-id"
+	keyArn := "arn:aws:kms:us-east-1:123456789012:key/test-key-id"
+	kmsCreationDate := time.Date(2026, 1, 13, 12, 0, 0, 0, time.UTC)
+	originalCreation := time.Date(2020, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	// Key without PGPCreationTime tag — uses KMS creation date
+	kmsKeyNoTag := &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &kmsCreationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: pubKeyBytes,
+			KeySpec:   types.KeySpecEccNistP256,
+		},
+	}
+
+	// Key with PGPCreationTime tag — uses original creation time
+	kmsKeyWithTag := &kmslib.PublicKey{
+		Description: &kms.DescribeKeyOutput{
+			KeyMetadata: &types.KeyMetadata{
+				KeyId:        &keyId,
+				Arn:          &keyArn,
+				CreationDate: &kmsCreationDate,
+			},
+		},
+		Key: &kms.GetPublicKeyOutput{
+			KeyId:     &keyId,
+			PublicKey: pubKeyBytes,
+			KeySpec:   types.KeySpecEccNistP256,
+		},
+		Tags: map[string]string{
+			"PGPCreationTime": originalCreation.Format(time.RFC3339),
+		},
+	}
+
+	infoNoTag, err := GetKeyInfo(kmsKeyNoTag)
+	assert.NilError(t, err)
+
+	infoWithTag, err := GetKeyInfo(kmsKeyWithTag)
+	assert.NilError(t, err)
+
+	// Different creation times must produce different fingerprints
+	assert.Assert(t, infoNoTag.Fingerprint != infoWithTag.Fingerprint,
+		"Fingerprints should differ when PGPCreationTime tag changes the creation time")
+	assert.Assert(t, infoNoTag.KeyId != infoWithTag.KeyId,
+		"Key IDs should differ when PGPCreationTime tag changes the creation time")
+	assert.Equal(t, infoWithTag.CreationTime, originalCreation)
+	assert.Equal(t, infoNoTag.CreationTime, kmsCreationDate)
+}
+
 func TestGetKeyInfo_InvalidKey(t *testing.T) {
 	keyId := "test-bad-key"
 	keyArn := "arn:aws:kms:us-east-1:123456789012:key/test-bad-key"

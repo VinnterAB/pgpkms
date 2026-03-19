@@ -1,6 +1,7 @@
 package cmd
 
 const (
-	pgpNameTag  = "PGPName"
-	pgpEmailTag = "PGPEmail"
+	pgpNameTag         = "PGPName"
+	pgpEmailTag        = "PGPEmail"
+	pgpCreationTimeTag = "PGPCreationTime"
 )

@@ -193,6 +193,55 @@ OSTree passes `--status-fd`, `--batch`, `--no-tty`, and other GPG flags that `pg
 
 The `pgpkms` cli is a clone of the [`gpg`](https://www.gnupg.org/) cli. This means that tools calling `gpg` can instead call `pgpkms` without any changes. A way to achieve that is symlink `pgpkms` to for instance `/usr/local/bin/gpg` in a build container/image.
 
+## Importing Existing GPG Keys into KMS
+
+If you have an existing GPG key and import it into AWS KMS, the PGP fingerprint and key ID computed by `pgpkms` will **not** match the original key by default. This is because the PGP v4 fingerprint includes the key's creation timestamp, and KMS reports the **import date** rather than the original creation date.
+
+To preserve the original fingerprint, tag your KMS key with `PGPCreationTime` set to the original key's creation time in RFC 3339 format.
+
+### 1. Get the original creation time from GPG
+
+```bash
+# Replace KEYID with your key's fingerprint or ID
+gpg --list-keys --with-colons KEYID | awk -F: '/^pub/{print $6}'
+```
+
+This prints a Unix timestamp (e.g., `1583064000`). Convert it to RFC 3339:
+
+```bash
+date -u -d @1583064000 +%Y-%m-%dT%H:%M:%SZ
+# Output: 2020-03-01T12:00:00Z
+```
+
+Or as a one-liner:
+
+```bash
+date -u -d @$(gpg --list-keys --with-colons KEYID | awk -F: '/^pub/{print $6}') +%Y-%m-%dT%H:%M:%SZ
+```
+
+On macOS, use `date -u -r TIMESTAMP +%Y-%m-%dT%H:%M:%SZ` instead.
+
+### 2. Tag the KMS key
+
+```bash
+aws kms tag-resource --key-id <key-id> \
+  --tags TagKey=PGPCreationTime,TagValue="2020-03-01T12:00:00Z"
+```
+
+### 3. Verify the fingerprint
+
+```bash
+# List keys from KMS
+./pgpkms --list-secret-keys
+
+# Compare against the original
+gpg --list-keys
+```
+
+The fingerprints should now match.
+
+> **Note:** If the `PGPCreationTime` tag is missing, `pgpkms` falls back to the KMS creation date — existing keys that were created (not imported) in KMS are unaffected.
+
 ## AWS Authentication
 
 pgpkms uses the standard AWS SDK credential chain:
