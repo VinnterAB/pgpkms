@@ -56,10 +56,13 @@ func Sign(client kms.Client, opts *Opts, args []string, sw *StatusWriter, lw *Lo
 	if err != nil {
 		return err
 	}
+	if result.Hash != digestHash {
+		lw.Log("using %s instead of %s, as required by the key", result.Hash, digestHash)
+	}
 	lw.Log("signed %d bytes using %s", len(result.Data), result.Fingerprint)
 
 	// Emit status lines
-	hashAlgo := gpgHashAlgoNumber(digestHash)
+	hashAlgo := gpgHashAlgoNumber(result.Hash)
 	sw.Emit("KEY_CONSIDERED", result.Fingerprint, "0")
 	sw.Emit("BEGIN_SIGNING", fmt.Sprintf("H%d", hashAlgo))
 
@@ -98,6 +101,7 @@ type signResult struct {
 	Data        []byte
 	Fingerprint string
 	PubkeyAlgo  int
+	Hash        crypto.Hash
 }
 
 // signData signs the input data using KMS and returns the signed data along with key metadata
@@ -113,6 +117,8 @@ func signData(client kms.Client, keyId string, inputData []byte, clearSign, armo
 		return nil, err
 	}
 
+	digestHash = pgp.SigningHash(key.PrivateKey.Public(), digestHash)
+
 	// Sign the data
 	signedData, err := pgp.SignData(key.PublicKey, key.PrivateKey, inputData, clearSign, armor, digestHash)
 	if err != nil {
@@ -123,6 +129,7 @@ func signData(client kms.Client, keyId string, inputData []byte, clearSign, armo
 		Data:        signedData,
 		Fingerprint: fmt.Sprintf("%X", info.Fingerprint),
 		PubkeyAlgo:  pgpAlgoNumber(key.PublicKey.Key.KeySpec),
+		Hash:        digestHash,
 	}, nil
 }
 

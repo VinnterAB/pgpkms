@@ -97,14 +97,14 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 		SelfSignature: &packet.Signature{
 			SigType:      packet.SigTypePositiveCert,
 			PubKeyAlgo:   pgpPubKey.PubKeyAlgo,
-			Hash:         crypto.SHA256,
+			Hash:         SigningHash(pubKeyAny, crypto.SHA256),
 			CreationTime: creationDate,
 			IssuerKeyId:  &pgpPubKey.KeyId,
 		},
 	}
 
 	// Sign the user ID with the primary key
-	err = identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, signingConfig(crypto.SHA256))
+	err = identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, signingConfig(identity.SelfSignature.Hash))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign user ID: %w", err)
 	}
@@ -114,6 +114,26 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 	entity.Identities[userId.Name] = identity
 
 	return serialize(entity, armored)
+}
+
+// SigningHash returns the hash to sign with for the given public key. AWS KMS
+// supports exactly one hash per ECDSA key spec, SHA-256 for P-256, SHA-384 for
+// P-384 and SHA-512 for P-521, so for ECDSA keys that hash is used regardless
+// of the requested one. GnuPG also rejects ECDSA signatures made with a hash
+// shorter than the curve order. RSA keys use the requested hash.
+func SigningHash(pub crypto.PublicKey, requested crypto.Hash) crypto.Hash {
+	pk, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return requested
+	}
+	switch bits := pk.Curve.Params().BitSize; {
+	case bits > 384:
+		return crypto.SHA512
+	case bits > 256:
+		return crypto.SHA384
+	default:
+		return crypto.SHA256
+	}
 }
 
 // signingConfig disables the random salt notation that go-crypto adds to v4
@@ -233,6 +253,7 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSig
 		PublicKey:  *pgpPubKey,
 		PrivateKey: signer,
 	}
+	digestHash = SigningHash(pubKeyAny, digestHash)
 
 	if clearSign {
 		return clearSignData(pgpPrivateKey, data, digestHash)
