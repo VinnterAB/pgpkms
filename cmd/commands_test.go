@@ -21,7 +21,7 @@ import (
 	"github.com/vinnterab/pgpkms/pgp"
 
 	//nolint:staticcheck // SA1019: required to validate exported OpenPGP identities in tests
-	"golang.org/x/crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"gotest.tools/v3/assert"
 )
 

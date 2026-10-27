@@ -3,6 +3,7 @@ package pgp
 import (
 	"bytes"
 	"crypto"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -11,20 +12,16 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/vinnterab/pgpkms/kms"
-	//nolint:staticcheck // SA1019: required for OpenPGP interoperability; planned migration later
-	"golang.org/x/crypto/openpgp"
-	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
-	"golang.org/x/crypto/openpgp/armor"
-	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
-	"golang.org/x/crypto/openpgp/clearsign"
-	//nolint:staticcheck // SA1019: required for OpenPGP interoperability
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 // KeyInfo contains PGP key metadata extracted from a KMS public key
 type KeyInfo struct {
-	Fingerprint  [20]byte
+	Fingerprint  []byte
 	KeyId        uint64
 	PubKeyAlgo   packet.PublicKeyAlgorithm
 	BitLength    uint16
@@ -42,18 +39,17 @@ func GetKeyInfo(publicKey *kms.PublicKey) (*KeyInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var pgpPubKey *packet.PublicKey
-	var bitLength uint16
+	pgpPubKey, err := newPGPPublicKey(creationDate, cryptoPubKey)
+	if err != nil {
+		return nil, err
+	}
 
+	var bitLength uint16
 	switch pk := cryptoPubKey.(type) {
 	case *rsa.PublicKey:
-		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
 		bitLength = uint16(pk.N.BitLen())
 	case *ecdsa.PublicKey:
-		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
 		bitLength = uint16(pk.Curve.Params().BitSize)
-	default:
-		return nil, fmt.Errorf("unsupported public key type: %T", cryptoPubKey)
 	}
 
 	return &KeyInfo{
@@ -72,14 +68,9 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 	if err != nil {
 		return nil, err
 	}
-	var pgpPubKey *packet.PublicKey
-	switch pk := pubKeyAny.(type) {
-	case *rsa.PublicKey:
-		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
-	case *ecdsa.PublicKey:
-		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
-	default:
-		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
+	pgpPubKey, err := newPGPPublicKey(creationDate, pubKeyAny)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create a self-signature for the identity
@@ -113,16 +104,89 @@ func Export(kmsKey *kms.PublicKey, signer crypto.Signer, armored bool, name, com
 	}
 
 	// Sign the user ID with the primary key
-	err = identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, &packet.Config{
-		DefaultHash: crypto.SHA256,
-	})
+	err = identity.SelfSignature.SignUserId(userId.Id, pgpPubKey, entity.PrivateKey, signingConfig(crypto.SHA256))
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign user ID: %w", err)
 	}
 
+	// Entity.Serialize writes Identity.Signatures, not SelfSignature.
+	identity.Signatures = []*packet.Signature{identity.SelfSignature}
 	entity.Identities[userId.Name] = identity
 
 	return serialize(entity, armored)
+}
+
+// signingConfig disables the random salt notation that go-crypto adds to v4
+// signatures by default. The salt length is only defined for SHA-2 and SHA-3,
+// so it breaks SHA-1 signing, and leaving it out keeps signatures identical in
+// structure to what pgpkms produced with golang.org/x/crypto/openpgp.
+func signingConfig(hash crypto.Hash) *packet.Config {
+	return &packet.Config{
+		DefaultHash:                           hash,
+		NonDeterministicSignaturesViaNotation: packet.BoolPointer(false),
+	}
+}
+
+func newPGPPublicKey(creationDate time.Time, pub crypto.PublicKey) (*packet.PublicKey, error) {
+	switch pk := pub.(type) {
+	case *rsa.PublicKey:
+		return packet.NewRSAPublicKey(creationDate, pk), nil
+	case *ecdsa.PublicKey:
+		return newECDSAPublicKey(creationDate, pk)
+	default:
+		return nil, fmt.Errorf("unsupported public key type: %T", pub)
+	}
+}
+
+// RFC 6637 section 11 curve OIDs, without the leading length octet.
+var ecdsaCurveOIDs = map[string][]byte{
+	"P-256": {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07},
+	"P-384": {0x2B, 0x81, 0x04, 0x00, 0x22},
+	"P-521": {0x2B, 0x81, 0x04, 0x00, 0x23},
+}
+
+// newECDSAPublicKey builds the OpenPGP key packet for a crypto/ecdsa key.
+// packet.NewECDSAPublicKey in github.com/ProtonMail/go-crypto only accepts the
+// library's own ECDSA type, which cannot be constructed from a crypto/ecdsa
+// key outside the library, so the RFC 6637 key packet is encoded here and
+// parsed back. This can be replaced by packet.NewSignerPrivateKey once
+// go-crypto accepts crypto.Signer keys with a crypto/ecdsa public key.
+func newECDSAPublicKey(creationDate time.Time, pub *ecdsa.PublicKey) (*packet.PublicKey, error) {
+	oid, ok := ecdsaCurveOIDs[pub.Curve.Params().Name]
+	if !ok {
+		return nil, fmt.Errorf("unsupported ECDSA curve: %s", pub.Curve.Params().Name)
+	}
+	ecdhPub, err := pub.ECDH()
+	if err != nil {
+		return nil, fmt.Errorf("invalid ECDSA public key: %w", err)
+	}
+	// Uncompressed SEC 1 point: 0x04 || X || Y.
+	point := ecdhPub.Bytes()
+
+	var body bytes.Buffer
+	body.WriteByte(4)
+	_ = binary.Write(&body, binary.BigEndian, uint32(creationDate.Unix()))
+	body.WriteByte(byte(packet.PubKeyAlgoECDSA))
+	body.WriteByte(byte(len(oid)))
+	body.Write(oid)
+	// The MPI bit count; the 0x04 prefix contributes three significant bits.
+	_ = binary.Write(&body, binary.BigEndian, uint16(8*(len(point)-1)+3))
+	body.Write(point)
+
+	var pkt bytes.Buffer
+	pkt.WriteByte(0x99) // Old format public key packet with a two-octet length
+	_ = binary.Write(&pkt, binary.BigEndian, uint16(body.Len()))
+	pkt.Write(body.Bytes())
+
+	p, err := packet.Read(&pkt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build ECDSA public key packet: %w", err)
+	}
+	pgpPubKey, ok := p.(*packet.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unexpected packet type %T for ECDSA public key", p)
+	}
+	return pgpPubKey, nil
 }
 
 func serialize(entity *openpgp.Entity, armored bool) (*bytes.Buffer, error) {
@@ -160,14 +224,9 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSig
 	if err != nil {
 		return nil, err
 	}
-	var pgpPubKey *packet.PublicKey
-	switch pk := pubKeyAny.(type) {
-	case *rsa.PublicKey:
-		pgpPubKey = packet.NewRSAPublicKey(creationDate, pk)
-	case *ecdsa.PublicKey:
-		pgpPubKey = packet.NewECDSAPublicKey(creationDate, pk)
-	default:
-		return nil, fmt.Errorf("unsupported public key type from KMS: %T", pubKeyAny)
+	pgpPubKey, err := newPGPPublicKey(creationDate, pubKeyAny)
+	if err != nil {
+		return nil, err
 	}
 
 	pgpPrivateKey := &packet.PrivateKey{
@@ -184,9 +243,7 @@ func SignData(kmsKey *kms.PublicKey, signer crypto.Signer, data []byte, clearSig
 
 func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash crypto.Hash) ([]byte, error) {
 	var signature bytes.Buffer
-	writer, err := clearsign.Encode(&signature, pgpPrivateKey, &packet.Config{
-		DefaultHash: digestHash,
-	})
+	writer, err := clearsign.Encode(&signature, pgpPrivateKey, signingConfig(digestHash))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clearsign Encoder %w", err)
 	}
@@ -201,26 +258,46 @@ func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash cry
 	return signature.Bytes(), nil
 }
 
-func detachedSignature(pgpPrivateKey *packet.PrivateKey, data []byte, armor bool, digestHash crypto.Hash) ([]byte, error) {
-	entity := &openpgp.Entity{
-		PrimaryKey: &pgpPrivateKey.PublicKey,
-		PrivateKey: pgpPrivateKey,
+// detachedSignature signs at the packet level because openpgp.DetachSign
+// only accepts entities whose self-signature carries the signing key flag,
+// and the KMS key is used here without any user ID or self-signature.
+func detachedSignature(pgpPrivateKey *packet.PrivateKey, data []byte, armored bool, digestHash crypto.Hash) ([]byte, error) {
+	config := signingConfig(digestHash)
+	sig := &packet.Signature{
+		Version:      pgpPrivateKey.Version,
+		SigType:      packet.SigTypeBinary,
+		PubKeyAlgo:   pgpPrivateKey.PubKeyAlgo,
+		Hash:         digestHash,
+		CreationTime: time.Now(),
+		IssuerKeyId:  &pgpPrivateKey.KeyId,
 	}
 
-	var err error
-	var signature bytes.Buffer
-	if armor {
-		err = openpgp.ArmoredDetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
-			DefaultHash: digestHash,
-		})
-	} else {
-		err = openpgp.DetachSign(&signature, entity, bytes.NewReader(data), &packet.Config{
-			DefaultHash: digestHash,
-		})
-	}
-
+	h, err := sig.PrepareSign(config)
 	if err != nil {
+		return nil, fmt.Errorf("failed to prepare signature: %w", err)
+	}
+	h.Write(data)
+	if err := sig.Sign(h, pgpPrivateKey, config); err != nil {
 		return nil, fmt.Errorf("failed to sign data: %w", err)
+	}
+
+	var signature bytes.Buffer
+	var w io.Writer = &signature
+	var armorWriter io.WriteCloser
+	if armored {
+		armorWriter, err = armor.Encode(&signature, openpgp.SignatureType, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create armor writer for signature: %w", err)
+		}
+		w = armorWriter
+	}
+	if err := sig.Serialize(w); err != nil {
+		return nil, fmt.Errorf("failed to serialize signature: %w", err)
+	}
+	if armorWriter != nil {
+		if err := armorWriter.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close armor writer for signature: %w", err)
+		}
 	}
 
 	return signature.Bytes(), nil
