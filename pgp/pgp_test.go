@@ -1,6 +1,7 @@
 package pgp
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -168,7 +169,7 @@ func TestGetKeyInfo_ECDSA(t *testing.T) {
 
 	info, err := GetKeyInfo(kmsPublicKey)
 	assert.NilError(t, err)
-	assert.Assert(t, info.Fingerprint != [20]byte{}, "Fingerprint should not be zero")
+	assert.Equal(t, len(info.Fingerprint), 20)
 	assert.Assert(t, info.KeyId != 0, "KeyId should not be zero")
 	assert.Equal(t, info.BitLength, uint16(256))
 	assert.Equal(t, info.CreationTime, creationDate)
@@ -202,7 +203,7 @@ func TestGetKeyInfo_RSA(t *testing.T) {
 
 	info, err := GetKeyInfo(kmsPublicKey)
 	assert.NilError(t, err)
-	assert.Assert(t, info.Fingerprint != [20]byte{}, "Fingerprint should not be zero")
+	assert.Equal(t, len(info.Fingerprint), 20)
 	assert.Assert(t, info.KeyId != 0, "KeyId should not be zero")
 	assert.Equal(t, info.BitLength, uint16(2048))
 	assert.Equal(t, info.CreationTime, creationDate)
@@ -261,7 +262,7 @@ func TestGetKeyInfo_PGPCreationTimeTag(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Different creation times must produce different fingerprints
-	assert.Assert(t, infoNoTag.Fingerprint != infoWithTag.Fingerprint,
+	assert.Assert(t, !bytes.Equal(infoNoTag.Fingerprint, infoWithTag.Fingerprint),
 		"Fingerprints should differ when PGPCreationTime tag changes the creation time")
 	assert.Assert(t, infoNoTag.KeyId != infoWithTag.KeyId,
 		"Key IDs should differ when PGPCreationTime tag changes the creation time")
