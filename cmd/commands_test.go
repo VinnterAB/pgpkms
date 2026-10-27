@@ -847,6 +847,26 @@ func TestDetermineOutputWriter(t *testing.T) {
 		assert.Assert(t, ok, "Should return stdoutWriteCloser")
 	})
 
+	t.Run("Output flag set to - should return stdout wrapper", func(t *testing.T) {
+		opts = Opts{}
+		dash := "-"
+		opts.Output = &dash
+		args := []string{"-&18"} // As passed by GPGME 1.24
+		inputName := "-&18"
+
+		writer, err := determineOutputWriter(args, &opts, inputName)
+		assert.NilError(t, err)
+
+		t.Cleanup(func() {
+			if err := writer.Close(); err != nil {
+				t.Logf("close failed: %v", err)
+			}
+		})
+
+		_, ok := writer.(stdoutWriteCloser)
+		assert.Assert(t, ok, "Should return stdoutWriteCloser")
+	})
+
 	t.Run("File input without output flag - should create file", func(t *testing.T) {
 		opts = Opts{}
 		args := []string{"test.txt"} // Has input file

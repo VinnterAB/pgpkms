@@ -189,6 +189,12 @@ func (s stdoutWriteCloser) Close() error {
 
 // determineOutputWriter decides whether to write to stdout or a file.
 func determineOutputWriter(args []string, opts *Opts, inputName string) (io.WriteCloser, error) {
+	// "--output -" means stdout, as in gpg. Newer GPGME (1.24) passes it when
+	// signing; older GPGME passes no --output.
+	if opts.Output != nil && *opts.Output == "-" {
+		return stdoutWriteCloser{}, nil
+	}
+
 	// Write to stdout when reading from stdin or a special filename (file descriptor),
 	// since GPGME expects the signature on stdout in these cases.
 	if opts.Output == nil && (len(args) == 0 || strings.HasPrefix(inputName, "-&")) {
