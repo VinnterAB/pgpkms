@@ -255,7 +255,42 @@ func clearSignData(pgpPrivateKey *packet.PrivateKey, data []byte, digestHash cry
 	if cerr := writer.Close(); cerr != nil {
 		return nil, fmt.Errorf("failed to close clearsign encoder: %w", cerr)
 	}
-	return signature.Bytes(), nil
+	return addArmorChecksum(signature.Bytes())
+}
+
+var signatureArmorStart = []byte("\n-----BEGIN " + openpgp.SignatureType + "-----")
+
+// addArmorChecksum re-armors the signature block of a cleartext signed
+// message with a CRC24 checksum. go-crypto's clearsign always omits it, and
+// GnuPG fails with "no valid OpenPGP data found" when such a block also has
+// no base64 padding, which happens for about half of all P-521 signatures.
+func addArmorChecksum(signed []byte) ([]byte, error) {
+	// The signature block comes last, and a dash-escaped message cannot
+	// contain a line starting with dashes.
+	idx := bytes.LastIndex(signed, signatureArmorStart)
+	if idx < 0 {
+		return nil, errors.New("no signature block in cleartext signed message")
+	}
+	idx++
+
+	block, err := armor.Decode(bytes.NewReader(signed[idx:]))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode clearsign signature block: %w", err)
+	}
+
+	var out bytes.Buffer
+	out.Write(signed[:idx])
+	w, err := armor.Encode(&out, block.Type, block.Header)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create armor writer for signature: %w", err)
+	}
+	if _, err := io.Copy(w, block.Body); err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to re-armor signature: %w", err), w.Close())
+	}
+	if err := w.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close armor writer for signature: %w", err)
+	}
+	return out.Bytes(), nil
 }
 
 // detachedSignature signs at the packet level because openpgp.DetachSign
