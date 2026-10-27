@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/vinnterab/pgpkms/kms"
 	"github.com/vinnterab/pgpkms/pgp"
@@ -59,7 +60,14 @@ func ExportKey(client kms.Client, opts *Opts, args []string, sw *StatusWriter, l
 		return err
 	}
 
-	fmt.Println(bytes.String())
+	// A trailing newline after the last packet makes binary keys unreadable
+	// for OpenPGP implementations, so only armored output gets one.
+	if opts.Armor {
+		bytes.WriteByte('\n')
+	}
+	if _, err := os.Stdout.Write(bytes.Bytes()); err != nil {
+		return fmt.Errorf("failed to write exported key: %w", err)
+	}
 
 	return nil
 }

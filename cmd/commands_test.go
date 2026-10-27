@@ -22,6 +22,7 @@ import (
 
 	//nolint:staticcheck // SA1019: required to validate exported OpenPGP identities in tests
 	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"gotest.tools/v3/assert"
 )
 
@@ -169,6 +170,46 @@ func assertEntityIdentity(t *testing.T, entity *openpgp.Entity, expectedName, ex
 	}
 
 	t.Fatal("expected exactly one identity")
+}
+
+func TestExportOutputHasNoTrailingData(t *testing.T) {
+	defer func() { opts = Opts{} }()
+
+	name := "Test User"
+	email := "test@example.com"
+
+	t.Run("binary", func(t *testing.T) {
+		opts = Opts{Export: true, User: "test-key-id", ExportName: &name, ExportEmail: &email}
+		output := captureStdout(t, func() {
+			err := ExportKey(NewMockKmsClient(), &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
+			assert.NilError(t, err)
+		})
+
+		// Every byte must belong to a packet: a trailing newline would be read
+		// as an invalid packet, as GnuPG does.
+		packets := packet.NewReader(strings.NewReader(output))
+		count := 0
+		for {
+			_, err := packets.Next()
+			if err == io.EOF {
+				break
+			}
+			assert.NilError(t, err)
+			count++
+		}
+		assert.Equal(t, count, 3, "expected public key, user ID and signature packets")
+	})
+
+	t.Run("armored", func(t *testing.T) {
+		opts = Opts{Export: true, Armor: true, User: "test-key-id", ExportName: &name, ExportEmail: &email}
+		output := captureStdout(t, func() {
+			err := ExportKey(NewMockKmsClient(), &opts, []string{}, inactiveStatusWriter(), inactiveLoggerWriter())
+			assert.NilError(t, err)
+		})
+
+		assert.Assert(t, strings.HasSuffix(output, "-----END PGP PUBLIC KEY BLOCK-----\n"), "unexpected end of output: %q", output[len(output)-40:])
+		readArmoredEntity(t, output)
+	})
 }
 
 func TestExportCommand(t *testing.T) {
